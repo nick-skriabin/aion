@@ -20,6 +20,7 @@ import {
 import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart } from "../domain/time.ts";
 import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
 import { findNearestEvent } from "../domain/layout.ts";
+import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
 import { theme } from "./theme.ts";
 import type { GCalEvent } from "../domain/gcalEvent.ts";
 import type { TimedEventLayout } from "../domain/layout.ts";
@@ -102,67 +103,40 @@ function TimelineKeybinds() {
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
   
+  const handlers = useMemo(() => ({
+    nextEvent: () => moveEventSelection("next"),
+    prevEvent: () => moveEventSelection("prev"),
+    firstEvent: () => moveEventSelection("first"),
+    lastEvent: () => moveEventSelection("last"),
+    jumpToNow: () => jumpToNow(),
+    openDetails: () => openDetails(),
+    editEvent: () => openEditDialog(),
+    deleteEvent: () => initiateDelete(),
+    openCommand: () => openCommand(),
+    toggleFocus: () => toggleFocus(),
+  }), [moveEventSelection, jumpToNow, openDetails, openEditDialog, initiateDelete, openCommand, toggleFocus]);
+  
   useInput((key) => {
-    const now = Date.now();
-    
-    if (key.name === "j" || key.name === "down") {
-      moveEventSelection("next");
-      return;
-    }
-    if (key.name === "k" || key.name === "up") {
-      moveEventSelection("prev");
-      return;
-    }
-    
+    // Handle double-tap 'g' for first event (gg)
     if (key.name === "g" && !key.shift) {
+      const now = Date.now();
       if (lastKeyRef.current === "g" && now - lastKeyTimeRef.current < 500) {
-        moveEventSelection("first");
+        handlers.firstEvent();
         lastKeyRef.current = "";
-      } else {
-        lastKeyRef.current = "g";
-        lastKeyTimeRef.current = now;
+        return;
       }
+      lastKeyRef.current = "g";
+      lastKeyTimeRef.current = now;
       return;
     }
     
-    if (key.name === "g" && key.shift) {
-      moveEventSelection("last");
-      return;
-    }
-    
-    if (key.name === "n" && !key.ctrl) {
-      jumpToNow();
-      return;
-    }
-    
-    if (key.name === "return" || key.name === "space") {
-      openDetails();
-      return;
-    }
-    
-    if (key.name === "e") {
-      openEditDialog();
-      return;
-    }
-    
-    if (key.name === "d" && key.shift) {
-      initiateDelete();
-      return;
-    }
-    
-    if (key.sequence === ":") {
-      openCommand();
-      return;
-    }
-    
-    if (key.name === "h" || key.name === "l" || key.name === "tab") {
-      toggleFocus();
-      return;
-    }
-    
+    // Reset last key if not 'g'
     if (key.name !== "g") {
       lastKeyRef.current = "";
     }
+    
+    // Handle other keys through registry
+    handleKeyEvent("timeline", key, handlers);
   });
   
   return null;

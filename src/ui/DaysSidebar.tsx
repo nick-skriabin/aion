@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useRef } from "react";
 import { Box, Text, ScrollView, FocusScope, useInput } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../state/atoms.ts";
 import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom } from "../state/actions.ts";
 import { formatDayShort, isToday } from "../domain/time.ts";
+import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
 import { theme } from "./theme.ts";
 
 function DaysKeybinds() {
@@ -15,34 +16,39 @@ function DaysKeybinds() {
   const toggleFocus = useSetAtom(toggleFocusAtom);
   const confirmDaySelection = useSetAtom(confirmDaySelectionAtom);
   
+  const lastKeyRef = useRef<string>("");
+  const lastKeyTimeRef = useRef<number>(0);
+  
+  const handlers = useMemo(() => ({
+    nextDay: () => moveDaySelection("down"),
+    prevDay: () => moveDaySelection("up"),
+    firstDay: () => moveDaySelection("start"),
+    lastDay: () => moveDaySelection("end"),
+    confirmDay: () => confirmDaySelection(),
+    toggleFocus: () => toggleFocus(),
+  }), [moveDaySelection, confirmDaySelection, toggleFocus]);
+  
   useInput((key) => {
-    // Navigation
-    if (key.name === "j" || key.name === "down") {
-      moveDaySelection("down");
-      return;
-    }
-    if (key.name === "k" || key.name === "up") {
-      moveDaySelection("up");
-      return;
-    }
-    
-    // G - jump forward 7 days
-    if (key.name === "g" && key.shift) {
-      moveDaySelection("end");
+    // Handle double-tap 'g' for first day (gg)
+    if (key.name === "g" && !key.shift) {
+      const now = Date.now();
+      if (lastKeyRef.current === "g" && now - lastKeyTimeRef.current < 500) {
+        handlers.firstDay();
+        lastKeyRef.current = "";
+        return;
+      }
+      lastKeyRef.current = "g";
+      lastKeyTimeRef.current = now;
       return;
     }
     
-    // Select current day and focus timeline
-    if (key.name === "return") {
-      confirmDaySelection();
-      return;
+    // Reset last key if not 'g'
+    if (key.name !== "g") {
+      lastKeyRef.current = "";
     }
     
-    // Switch pane - h, l, or Tab all work
-    if (key.name === "h" || key.name === "l" || key.name === "tab") {
-      toggleFocus();
-      return;
-    }
+    // Handle other keys through registry
+    handleKeyEvent("days", key, handlers);
   });
   
   return null;

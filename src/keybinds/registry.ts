@@ -44,6 +44,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "space", display: "Space", description: "Open event details", action: "openDetails" },
     { key: "e", display: "e", description: "Edit event", action: "editEvent" },
     { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent" },
+    { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "h", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
     { key: "l", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
     { key: "tab", display: "Tab", description: "Switch to days sidebar", action: "toggleFocus" },

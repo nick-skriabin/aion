@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text, Portal, ScrollView, FocusScope, Keybind } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { selectedEventAtom, timezoneAtom, focusAtom } from "../state/atoms.ts";
 import { updateAttendanceAtom, openEditDialogAtom, initiateDeleteAtom } from "../state/actions.ts";
+import { ScopedKeybinds } from "../keybinds/useKeybinds.tsx";
 import {
   getDisplayTitle,
   getEventTypeLabel,
@@ -112,22 +113,21 @@ export function DetailsPanel() {
   
   const isActive = focus === "details";
   
+  // Action handlers for keybinds
+  const handlers = useMemo(() => ({
+    acceptInvite: () => updateAttendance({ eventId: event.id, status: "accepted" }),
+    declineInvite: () => updateAttendance({ eventId: event.id, status: "declined" }),
+    tentativeInvite: () => updateAttendance({ eventId: event.id, status: "tentative" }),
+    editEvent: () => openEditDialog(),
+    deleteEvent: () => initiateDelete(),
+    openMeetingLink: event.hangoutLink ? () => Bun.spawn(["open", event.hangoutLink!]) : undefined,
+  }), [event.id, event.hangoutLink, updateAttendance, openEditDialog, initiateDelete]);
+  
   return (
     <Portal zIndex={10}>
       <FocusScope trap={isActive}>
-        {/* Keybinds for details panel */}
-        {isActive && (
-          <>
-            <Keybind keypress="y" onPress={() => updateAttendance({ eventId: event.id, status: "accepted" })} />
-            <Keybind keypress="n" onPress={() => updateAttendance({ eventId: event.id, status: "declined" })} />
-            <Keybind keypress="m" onPress={() => updateAttendance({ eventId: event.id, status: "tentative" })} />
-            <Keybind keypress="e" onPress={() => openEditDialog()} />
-            <Keybind keypress="shift+d" onPress={() => initiateDelete()} />
-            {event.hangoutLink && (
-              <Keybind keypress="o" onPress={() => Bun.spawn(["open", event.hangoutLink!])} />
-            )}
-          </>
-        )}
+        {/* Keybinds from registry */}
+        <ScopedKeybinds scope="details" handlers={handlers as Record<string, () => void>} enabled={isActive} />
         <Box
           style={{
             position: "absolute",
