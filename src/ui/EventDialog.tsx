@@ -8,7 +8,7 @@ import {
   Select,
   Portal,
   FocusScope,
-  ScrollView,
+  useInput,
 } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
@@ -27,8 +27,24 @@ const EVENT_TYPES: Array<{ label: string; value: EventType }> = [
   { label: "Event", value: "default" },
   { label: "Out of office", value: "outOfOffice" },
   { label: "Focus time", value: "focusTime" },
-  { label: "Birthday", value: "birthday" },
 ];
+
+const DIALOG_WIDTH = 50;
+
+function DialogKeybinds({ onSave }: { onSave: () => void }) {
+  const pop = useSetAtom(popOverlayAtom);
+  
+  useInput((key) => {
+    if (key.name === "escape") {
+      pop();
+    }
+    if (key.name === "s" && key.ctrl) {
+      onSave();
+    }
+  });
+  
+  return null;
+}
 
 export function EventDialog() {
   const [dialogEvent, setDialogEvent] = useAtom(dialogEventAtom);
@@ -37,11 +53,9 @@ export function EventDialog() {
   const pop = useSetAtom(popOverlayAtom);
   const save = useSetAtom(saveEventAtom);
   
-  // Local form state
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [link, setLink] = useState("");
   const [eventType, setEventType] = useState<EventType>("default");
   const [isAllDay, setIsAllDay] = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -51,14 +65,12 @@ export function EventDialog() {
   const [attendeesInput, setAttendeesInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
   
-  // Initialize form from dialogEvent
   useEffect(() => {
     if (!dialogEvent) return;
     
     setSummary(dialogEvent.summary || "");
     setDescription(dialogEvent.description || "");
     setLocation(dialogEvent.location || "");
-    setLink(dialogEvent.hangoutLink || dialogEvent.htmlLink || "");
     setEventType(dialogEvent.eventType || "default");
     
     const allDay = dialogEvent.start ? checkIsAllDay(dialogEvent as GCalEvent) : false;
@@ -78,6 +90,8 @@ export function EventDialog() {
     
     if (dialogEvent.attendees) {
       setAttendees(dialogEvent.attendees.map((a) => a.email));
+    } else {
+      setAttendees([]);
     }
   }, [dialogEvent, tz]);
   
@@ -105,7 +119,6 @@ export function EventDialog() {
       summary: summary || "",
       description: description || undefined,
       location: location || undefined,
-      hangoutLink: link || undefined,
       eventType,
       start,
       end,
@@ -130,7 +143,6 @@ export function EventDialog() {
     setAttendees(attendees.filter((a) => a !== email));
   };
   
-  // Common input style
   const inputStyle = {
     color: theme.input.text,
     bg: theme.input.background,
@@ -141,178 +153,171 @@ export function EventDialog() {
       <Box
         style={{
           position: "absolute",
-          inset: 2,
-          flexDirection: "column",
-          padding: 1,
-          bg: theme.modal.background,
-          border: "single",
-          borderColor: theme.modal.border,
+          inset: 0,
+          justifyContent: "center",
+          alignItems: "center",
         }}
       >
-        <FocusScope trap>
-          {/* Header */}
-          <Box style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text style={{ bold: true, color: theme.accent.primary }}>
-              {isEditMode ? "Edit Event" : "New Event"}
-            </Text>
-            <Text style={{ color: theme.text.dim }}>esc:cancel</Text>
-          </Box>
-          
-          <ScrollView style={{ flexGrow: 1, paddingTop: 1 }}>
-            {/* Title */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Text style={{ color: theme.text.dim }}>title</Text>
-              <Input
-                value={summary}
-                onChange={setSummary}
-                placeholder="Add title"
-                style={inputStyle}
-              />
+        <Box
+          style={{
+            width: DIALOG_WIDTH,
+            flexDirection: "column",
+            padding: 1,
+            bg: theme.modal.background,
+          }}
+        >
+          <FocusScope trap>
+            <DialogKeybinds onSave={handleSave} />
+            
+            {/* Header */}
+            <Box style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ bold: true, color: theme.accent.primary }}>
+                {isEditMode ? "Edit Event" : "New Event"}
+              </Text>
+              <Text style={{ color: theme.text.dim, dim: true }}>^S save</Text>
             </Box>
             
-            {/* Event Type */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Text style={{ color: theme.text.dim }}>type</Text>
-              <Select
-                items={EVENT_TYPES}
-                value={eventType}
-                onChange={(v) => setEventType(v as EventType)}
-                highlightColor={theme.accent.primary}
-                style={{ bg: theme.input.background }}
-              />
-            </Box>
-            
-            {/* All-day toggle */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Checkbox
-                checked={isAllDay}
-                onChange={setIsAllDay}
-                label="All-day"
-                focusedStyle={{ color: theme.accent.primary }}
-              />
-            </Box>
-            
-            {/* Time section */}
-            <Box style={{ paddingBottom: 1, flexDirection: "row", gap: 2 }}>
-              <Box style={{ flexGrow: 1 }}>
-                <Text style={{ color: theme.text.dim }}>start</Text>
+            {/* Form fields */}
+            <Box style={{ flexDirection: "column", paddingY: 1 }}>
+              {/* Title */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>title</Text>
+                <Input
+                  value={summary}
+                  onChange={setSummary}
+                  placeholder="Event title"
+                  style={{ ...inputStyle, flexGrow: 1 }}
+                />
+              </Box>
+              
+              {/* Type */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>type</Text>
+                <Select
+                  items={EVENT_TYPES}
+                  value={eventType}
+                  onChange={(v) => setEventType(v as EventType)}
+                  highlightColor={theme.accent.primary}
+                  style={{ bg: theme.input.background }}
+                />
+                <Checkbox
+                  checked={isAllDay}
+                  onChange={setIsAllDay}
+                  label="all-day"
+                  focusedStyle={{ color: theme.accent.primary }}
+                />
+              </Box>
+              
+              {/* Start */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>start</Text>
                 <Input
                   value={startDate}
                   onChange={setStartDate}
                   placeholder="YYYY-MM-DD"
-                  style={inputStyle}
+                  style={{ ...inputStyle, width: 12 }}
                 />
                 {!isAllDay && (
                   <Input
                     value={startTime}
                     onChange={setStartTime}
                     placeholder="HH:MM"
-                    style={inputStyle}
+                    style={{ ...inputStyle, width: 7 }}
                   />
                 )}
               </Box>
-              <Box style={{ flexGrow: 1 }}>
-                <Text style={{ color: theme.text.dim }}>end</Text>
+              
+              {/* End */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>end</Text>
                 <Input
                   value={endDate}
                   onChange={setEndDate}
                   placeholder="YYYY-MM-DD"
-                  style={inputStyle}
+                  style={{ ...inputStyle, width: 12 }}
                 />
                 {!isAllDay && (
                   <Input
                     value={endTime}
                     onChange={setEndTime}
                     placeholder="HH:MM"
-                    style={inputStyle}
+                    style={{ ...inputStyle, width: 7 }}
                   />
                 )}
               </Box>
-            </Box>
-            
-            {/* Location */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Text style={{ color: theme.text.dim }}>location</Text>
-              <Input
-                value={location}
-                onChange={setLocation}
-                placeholder="Add location"
-                style={inputStyle}
-              />
-            </Box>
-            
-            {/* Link */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Text style={{ color: theme.text.dim }}>link</Text>
-              <Input
-                value={link}
-                onChange={setLink}
-                placeholder="https://..."
-                style={inputStyle}
-              />
-            </Box>
-            
-            {/* Attendees */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Text style={{ color: theme.text.dim }}>
-                attendees ({attendees.length})
-              </Text>
+              
+              {/* Location */}
               <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>location</Text>
+                <Input
+                  value={location}
+                  onChange={setLocation}
+                  placeholder="Add location"
+                  style={{ ...inputStyle, flexGrow: 1 }}
+                />
+              </Box>
+              
+              {/* Attendees */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>guests</Text>
                 <Input
                   value={attendeesInput}
                   onChange={setAttendeesInput}
+                  onKeyPress={(key) => {
+                    if (key.name === "return" && attendeesInput.trim()) {
+                      addAttendee();
+                    }
+                  }}
                   placeholder="email@example.com"
                   style={{ ...inputStyle, flexGrow: 1 }}
                 />
-                <Button
-                  onPress={addAttendee}
-                  style={{ paddingX: 1, bg: theme.input.background }}
-                  focusedStyle={{ bg: theme.accent.primary, color: "black", bold: true }}
-                >
-                  <Text>add</Text>
-                </Button>
               </Box>
-              {attendees.map((email) => (
-                <Box key={email} style={{ flexDirection: "row", gap: 1 }}>
-                  <Text style={{ color: theme.text.secondary }}>· {email}</Text>
-                  <Button onPress={() => removeAttendee(email)}>
-                    <Text style={{ color: theme.accent.error }}>×</Text>
-                  </Button>
+              
+              {/* Attendees list */}
+              {attendees.length > 0 && (
+                <Box style={{ flexDirection: "column", paddingLeft: 9 }}>
+                  {attendees.map((email) => (
+                    <Box key={email} style={{ flexDirection: "row", gap: 1 }}>
+                      <Text style={{ color: theme.text.secondary }}>· {email}</Text>
+                      <Button onPress={() => removeAttendee(email)}>
+                        <Text style={{ color: theme.accent.error }}>×</Text>
+                      </Button>
+                    </Box>
+                  ))}
                 </Box>
-              ))}
+              )}
+              
+              {/* Notes */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: 8 }}>notes</Text>
+                <Input
+                  value={description}
+                  onChange={setDescription}
+                  placeholder="Add notes"
+                  style={{ ...inputStyle, flexGrow: 1 }}
+                />
+              </Box>
             </Box>
             
-            {/* Description */}
-            <Box style={{ paddingBottom: 1 }}>
-              <Text style={{ color: theme.text.dim }}>notes</Text>
-              <Input
-                value={description}
-                onChange={setDescription}
-                placeholder="Add notes"
-                multiline
-                style={{ ...inputStyle, minHeight: 3 }}
-              />
+            {/* Footer */}
+            <Box style={{ flexDirection: "row", gap: 1, justifyContent: "flex-end" }}>
+              <Button
+                onPress={() => pop()}
+                style={{ paddingX: 1 }}
+                focusedStyle={{ bg: theme.text.dim, color: "black" }}
+              >
+                <Text>cancel</Text>
+              </Button>
+              <Button
+                onPress={handleSave}
+                style={{ paddingX: 1 }}
+                focusedStyle={{ bg: theme.accent.primary, color: "black", bold: true }}
+              >
+                <Text>{isEditMode ? "save" : "create"}</Text>
+              </Button>
             </Box>
-          </ScrollView>
-          
-          {/* Footer buttons */}
-          <Box style={{ flexDirection: "row", gap: 2, justifyContent: "flex-end" }}>
-            <Button
-              onPress={() => pop()}
-              style={{ paddingX: 1, bg: theme.input.background }}
-              focusedStyle={{ bg: theme.text.dim, color: "black" }}
-            >
-              <Text>cancel</Text>
-            </Button>
-            <Button
-              onPress={handleSave}
-              style={{ paddingX: 1, bg: theme.input.background }}
-              focusedStyle={{ bg: theme.accent.primary, color: "black", bold: true }}
-            >
-              <Text>{isEditMode ? "save" : "create"}</Text>
-            </Button>
-          </Box>
-        </FocusScope>
+          </FocusScope>
+        </Box>
       </Box>
     </Portal>
   );

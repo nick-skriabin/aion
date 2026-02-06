@@ -18,11 +18,51 @@ import {
   moveEventSelectionAtom,
 } from "../state/actions.ts";
 import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart } from "../domain/time.ts";
-import { getDisplayTitle } from "../domain/gcalEvent.ts";
+import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
 import { findNearestEvent } from "../domain/layout.ts";
 import { theme } from "./theme.ts";
 import type { GCalEvent } from "../domain/gcalEvent.ts";
 import type { TimedEventLayout } from "../domain/layout.ts";
+
+// Get the user's response status for an event
+function getSelfResponseStatus(event: GCalEvent): ResponseStatus | undefined {
+  const selfAttendee = event.attendees?.find((a) => a.self);
+  return selfAttendee?.responseStatus;
+}
+
+// Get attendance indicator character
+function getAttendanceIndicator(status: ResponseStatus | undefined, hasAttendees: boolean): string {
+  switch (status) {
+    case "accepted":
+      return "✓ ";
+    case "declined":
+      return "✗ ";
+    case "tentative":
+      return "? ";
+    case "needsAction":
+      return "! "; // New invite needing attention - exclamation mark is more urgent
+    default:
+      // Show indicator only if event has attendees (it's a meeting invite)
+      return hasAttendees ? "! " : "";
+  }
+}
+
+// Get attendance color
+function getAttendanceColor(status: ResponseStatus | undefined, hasAttendees: boolean): string | undefined {
+  switch (status) {
+    case "accepted":
+      return theme.status.accepted;
+    case "declined":
+      return theme.status.declined;
+    case "tentative":
+      return theme.status.tentative;
+    case "needsAction":
+      return theme.accent.warning; // Yellow/orange for urgency
+    default:
+      // Highlight if it's a meeting without response
+      return hasAttendees ? theme.accent.warning : undefined;
+  }
+}
 
 const HOUR_LABEL_WIDTH = 7;
 const SLOTS_PER_HOUR = 4;
@@ -178,15 +218,22 @@ function EventColumn({
   const event = layout.event;
   const eventColor = getEventTypeColor(event);
   const isHighlighted = isSelected && isFocused;
+  const responseStatus = getSelfResponseStatus(event);
+  const hasAttendees = (event.attendees?.length ?? 0) > 0;
+  const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
+  const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
+  const isDeclined = responseStatus === "declined";
   
   const bgColor = isHighlighted ? theme.selection.background : undefined;
-  const textColor = isHighlighted ? theme.selection.text : eventColor;
+  const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
   
   if (isStart) {
     const start = getEventStart(event);
     const timeStr = formatTime(start);
     const title = getDisplayTitle(event);
-    const titleWidth = Math.max(1, width - 8);
+    // Account for attendance indicator in width calculation (indicator is 2 chars with space)
+    const indicatorWidth = attendanceIndicator.length;
+    const titleWidth = Math.max(1, width - 8 - indicatorWidth);
     const displayTitle = title.length > titleWidth ? title.slice(0, titleWidth - 1) + "…" : title;
     
     return (
@@ -195,7 +242,12 @@ function EventColumn({
           {isHighlighted ? "▸" : "○"}
         </Text>
         <Text style={{ color: isHighlighted ? theme.selection.text : theme.text.dim }}> {timeStr} </Text>
-        <Text style={{ color: textColor, bold: isHighlighted }}>
+        {attendanceIndicator && (
+          <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
+            {attendanceIndicator}
+          </Text>
+        )}
+        <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
           {displayTitle}
         </Text>
       </Box>
@@ -203,7 +255,7 @@ function EventColumn({
   } else {
     return (
       <Box style={{ width, bg: bgColor }}>
-        <Text style={{ color: textColor }}>
+        <Text style={{ color: textColor, dim: isDeclined }}>
           │
         </Text>
       </Box>
@@ -251,8 +303,9 @@ function SlotRow({
   let gridChar = isHourStart ? "┼" : "│";
   let gridColor = hasOverlap ? theme.accent.warning : theme.text.dim;
   
+  // For now slot, show indicator (use < instead of ◀ for consistent width)
   if (isNowSlot) {
-    gridChar = "◀"; // Current time indicator pointing at events
+    gridChar = "<";
     gridColor = theme.accent.error;
   }
   
@@ -260,7 +313,11 @@ function SlotRow({
     <Box style={{ flexDirection: "row" }}>
       {/* Hour label */}
       <Box style={{ width: HOUR_LABEL_WIDTH }}>
-        {isHourStart ? (
+        {isHourStart && isNowSlot ? (
+          <Text style={{ color: theme.accent.error, bold: true }}>
+            {formatHourLabel(hour).padStart(HOUR_LABEL_WIDTH - 1)}
+          </Text>
+        ) : isHourStart ? (
           <Text style={{ color: theme.text.dim }}>
             {formatHourLabel(hour).padStart(HOUR_LABEL_WIDTH - 1)}
           </Text>
@@ -271,8 +328,8 @@ function SlotRow({
         ) : null}
       </Box>
       
-      {/* Grid line with current time indicator */}
-      <Text style={{ color: gridColor, bold: isNowSlot }}>
+      {/* Grid line */}
+      <Text style={{ color: gridColor }}>
         {gridChar}
       </Text>
       
@@ -302,8 +359,14 @@ function AllDayBar({
         const isSelected = selectedEventId === event.id;
         const eventColor = getEventTypeColor(event);
         const isHighlighted = isSelected && isFocused;
+        const responseStatus = getSelfResponseStatus(event);
+        const hasAttendees = (event.attendees?.length ?? 0) > 0;
+        const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
+        const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
+        const isDeclined = responseStatus === "declined";
+        
         const bgColor = isHighlighted ? theme.selection.background : undefined;
-        const textColor = isHighlighted ? theme.selection.text : eventColor;
+        const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
         
         return (
           <Box key={event.id} style={{ flexDirection: "row" }}>
@@ -316,7 +379,12 @@ function AllDayBar({
                 {isHighlighted ? "▸" : "○"}
               </Text>
               <Text> </Text>
-              <Text style={{ color: textColor, bold: isHighlighted }}>
+              {attendanceIndicator && (
+                <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
+                  {attendanceIndicator}
+                </Text>
+              )}
+              <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
                 {getDisplayTitle(event)}
               </Text>
             </Box>

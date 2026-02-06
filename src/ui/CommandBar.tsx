@@ -1,8 +1,27 @@
 import React from "react";
-import { Box, Text, Input, Portal, FocusScope } from "@nick-skriabin/glyph";
-import { useAtom } from "jotai";
+import { Box, Text, Input, Portal, FocusScope, useInput } from "@nick-skriabin/glyph";
+import { useAtom, useSetAtom } from "jotai";
 import { commandInputAtom } from "../state/atoms.ts";
+import { executeCommandAtom, popOverlayAtom } from "../state/actions.ts";
 import { theme } from "./theme.ts";
+
+function CommandKeybinds() {
+  const executeCommand = useSetAtom(executeCommandAtom);
+  const pop = useSetAtom(popOverlayAtom);
+  
+  useInput((key) => {
+    if (key.name === "return") {
+      executeCommand();
+      return;
+    }
+    if (key.name === "escape") {
+      pop();
+      return;
+    }
+  });
+  
+  return null;
+}
 
 export function CommandBar() {
   const [input, setInput] = useAtom(commandInputAtom);
@@ -20,12 +39,13 @@ export function CommandBar() {
         }}
       >
         <FocusScope trap>
+          <CommandKeybinds />
           <Box style={{ flexDirection: "row", gap: 1, paddingX: 1 }}>
             <Text style={{ color: theme.accent.primary, bold: true }}>:</Text>
             <Input
               value={input}
               onChange={setInput}
-              placeholder="/new [title]"
+              placeholder="new [title]"
               style={{ 
                 flexGrow: 1, 
                 color: theme.input.text,

@@ -1,6 +1,6 @@
 import { atom, type Getter, type Setter, type WritableAtom } from "jotai";
 import { DateTime } from "luxon";
-import type { GCalEvent } from "../domain/gcalEvent.ts";
+import type { GCalEvent, ResponseStatus } from "../domain/gcalEvent.ts";
 import { findNearestEvent } from "../domain/layout.ts";
 import { getNowMinutes, getLocalTimezone } from "../domain/time.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
@@ -412,6 +412,44 @@ export const cancelDeleteAtom = atom(null, (get, set) => {
   set(popOverlayAtom);
 });
 
+// Update attendance status
+export const updateAttendanceAtom = atom(
+  null,
+  async (get, set, { eventId, status }: { eventId: string; status: ResponseStatus }) => {
+    const event = get(eventsAtom)[eventId];
+    if (!event) return;
+    
+    // Find or create self attendee
+    let attendees = event.attendees ? [...event.attendees] : [];
+    const selfIndex = attendees.findIndex((a) => a.self);
+    
+    if (selfIndex >= 0) {
+      // Update existing self attendee
+      attendees[selfIndex] = {
+        ...attendees[selfIndex],
+        responseStatus: status,
+      };
+    } else {
+      // Add self as attendee (using a placeholder email for v0)
+      attendees.push({
+        email: "me@example.com",
+        displayName: "Me",
+        self: true,
+        responseStatus: status,
+      });
+    }
+    
+    const updatedEvent: GCalEvent = {
+      ...event,
+      attendees,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    await eventsRepo.update(updatedEvent);
+    set(eventsAtom, (prev) => ({ ...prev, [eventId]: updatedEvent }));
+  }
+);
+
 // ===== Command Actions =====
 
 // Open command bar
@@ -423,8 +461,8 @@ export const openCommandAtom = atom(null, (get, set) => {
 export const executeCommandAtom = atom(null, (get, set) => {
   const input = get(commandInputAtom).trim();
   
-  if (input.startsWith("/new")) {
-    const title = input.slice(4).trim();
+  if (input === "new" || input.startsWith("new ")) {
+    const title = input.slice(3).trim();
     set(popOverlayAtom); // Close command bar first
     set(openNewDialogAtom, title || undefined);
   } else {
