@@ -42,8 +42,8 @@ const ThemeSchema = z.object({
     birthday: TerminalColorSchema.default("yellow"),
   }).default({}),
   selection: z.object({
-    indicator: TerminalColorSchema.default("cyan"),
-    text: TerminalColorSchema.default("white"),
+    background: TerminalColorSchema.default("blackBright"),
+    text: TerminalColorSchema.default("whiteBright"),
   }).default({}),
   status: z.object({
     accepted: TerminalColorSchema.default("green"),

@@ -17,13 +17,17 @@ import {
   jumpToNowAtom,
   moveEventSelectionAtom,
 } from "../state/actions.ts";
-import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart, getEventEnd } from "../domain/time.ts";
-import { getDisplayTitle, isAllDay as checkIsAllDay } from "../domain/gcalEvent.ts";
+import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart } from "../domain/time.ts";
+import { getDisplayTitle } from "../domain/gcalEvent.ts";
+import { findNearestEvent } from "../domain/layout.ts";
 import { theme } from "./theme.ts";
 import type { GCalEvent } from "../domain/gcalEvent.ts";
 import type { TimedEventLayout } from "../domain/layout.ts";
 
-const HOUR_LABEL_WIDTH = 6;
+const HOUR_LABEL_WIDTH = 7;
+const SLOTS_PER_HOUR = 4;
+const MINUTES_PER_SLOT = 15;
+const COLUMN_WIDTH = 28;
 
 function getEventTypeColor(event: GCalEvent) {
   switch (event.eventType) {
@@ -124,162 +128,158 @@ function TimelineKeybinds() {
   return null;
 }
 
-// Get all events active during a specific hour
-function getEventsForHour(hour: number, allEvents: TimedEventLayout[]): {
-  starting: TimedEventLayout[];
-  continuing: TimedEventLayout[];
+function minutesToSlot(minutes: number): number {
+  return Math.floor(minutes / MINUTES_PER_SLOT);
+}
+
+interface SlotEvent {
+  layout: TimedEventLayout;
+  isStart: boolean;
+}
+
+function getEventsForSlot(slotIndex: number, allEvents: TimedEventLayout[]): {
+  byColumn: Map<number, SlotEvent>;
+  maxColumns: number;
 } {
-  const hourStart = hour * 60;
-  const hourEnd = (hour + 1) * 60;
+  const slotStart = slotIndex * MINUTES_PER_SLOT;
+  const slotEnd = slotStart + MINUTES_PER_SLOT;
+  const byColumn = new Map<number, SlotEvent>();
+  let maxColumns = 1;
   
-  const starting: TimedEventLayout[] = [];
-  const continuing: TimedEventLayout[] = [];
-  
-  for (const event of allEvents) {
-    const eventStartHour = Math.floor(event.startMinutes / 60);
-    
-    // Event starts this hour
-    if (eventStartHour === hour) {
-      starting.push(event);
-    }
-    // Event started earlier but continues through this hour
-    else if (event.startMinutes < hourStart && event.endMinutes > hourStart) {
-      continuing.push(event);
+  for (const layout of allEvents) {
+    if (layout.startMinutes < slotEnd && layout.endMinutes > slotStart) {
+      const startSlot = minutesToSlot(layout.startMinutes);
+      const isStart = startSlot === slotIndex;
+      byColumn.set(layout.column, { layout, isStart });
+      maxColumns = Math.max(maxColumns, layout.totalColumns);
     }
   }
   
-  // Sort starting events by start time
-  starting.sort((a, b) => a.startMinutes - b.startMinutes);
-  
-  return { starting, continuing };
+  return { byColumn, maxColumns };
 }
 
-// Single event row
-function EventRow({
-  layout,
+// Event column with background highlighting for selection
+function EventColumn({
+  slotEvent,
   isSelected,
   isFocused,
-  isContinuation,
-  showConflictWith,
+  width,
 }: {
-  layout: TimedEventLayout;
+  slotEvent: SlotEvent | null;
   isSelected: boolean;
   isFocused: boolean;
-  isContinuation: boolean;
-  showConflictWith?: string[];
+  width: number;
 }) {
-  const event = layout.event;
-  const color = getEventTypeColor(event);
-  const start = getEventStart(event);
-  const end = getEventEnd(event);
+  if (!slotEvent) {
+    return <Box style={{ width }} />;
+  }
   
-  return (
-    <Box style={{ flexDirection: "row", gap: 1 }}>
-      {/* Selection indicator */}
-      <Text
-        style={{
-          color: isSelected && isFocused ? theme.selection.indicator : color,
-          bold: isSelected && isFocused,
-        }}
-      >
-        {isSelected && isFocused ? "▸" : isContinuation ? "┆" : "○"}
-      </Text>
-      
-      {/* Time range or continuation indicator */}
-      <Text
-        style={{
-          color: isSelected && isFocused ? theme.selection.indicator : theme.text.dim,
-          width: 13,
-        }}
-      >
-        {isContinuation ? "  (ongoing)" : `${formatTime(start)}-${formatTime(end)}`}
-      </Text>
-      
-      {/* Event title */}
-      <Text
-        style={{
-          color: isSelected && isFocused ? theme.selection.indicator : color,
-          bold: isSelected && isFocused,
-          flexGrow: 1,
-        }}
-        wrap="truncate"
-      >
-        {getDisplayTitle(event)}
-      </Text>
-    </Box>
-  );
+  const { layout, isStart } = slotEvent;
+  const event = layout.event;
+  const eventColor = getEventTypeColor(event);
+  const isHighlighted = isSelected && isFocused;
+  
+  const bgColor = isHighlighted ? theme.selection.background : undefined;
+  const textColor = isHighlighted ? theme.selection.text : eventColor;
+  
+  if (isStart) {
+    const start = getEventStart(event);
+    const timeStr = formatTime(start);
+    const title = getDisplayTitle(event);
+    const titleWidth = Math.max(1, width - 8);
+    const displayTitle = title.length > titleWidth ? title.slice(0, titleWidth - 1) + "…" : title;
+    
+    return (
+      <Box style={{ width, flexDirection: "row", bg: bgColor }}>
+        <Text style={{ color: textColor, bold: isHighlighted }}>
+          {isHighlighted ? "▸" : "○"}
+        </Text>
+        <Text style={{ color: isHighlighted ? theme.selection.text : theme.text.dim }}> {timeStr} </Text>
+        <Text style={{ color: textColor, bold: isHighlighted }}>
+          {displayTitle}
+        </Text>
+      </Box>
+    );
+  } else {
+    return (
+      <Box style={{ width, bg: bgColor }}>
+        <Text style={{ color: textColor }}>
+          │
+        </Text>
+      </Box>
+    );
+  }
 }
 
-// Hour block showing ALL events active during this hour
-function HourBlock({
-  hour,
+// Single slot row (15 minutes)
+function SlotRow({
+  slotIndex,
   allEvents,
   selectedEventId,
   isFocused,
-  isNowHour,
+  isNowSlot,
 }: {
-  hour: number;
+  slotIndex: number;
   allEvents: TimedEventLayout[];
   selectedEventId: string | null;
   isFocused: boolean;
-  isNowHour: boolean;
+  isNowSlot: boolean;
 }) {
-  const { starting, continuing } = getEventsForHour(hour, allEvents);
+  const { byColumn, maxColumns } = getEventsForSlot(slotIndex, allEvents);
+  const hour = Math.floor(slotIndex / SLOTS_PER_HOUR);
+  const slotInHour = slotIndex % SLOTS_PER_HOUR;
+  const isHourStart = slotInHour === 0;
+  const hasOverlap = maxColumns > 1;
   
-  // Combine all active events: continuing first, then starting
-  const activeEvents = [...continuing, ...starting];
-  const hasMultiple = activeEvents.length > 1;
+  const columns: React.ReactNode[] = [];
+  for (let col = 0; col < maxColumns; col++) {
+    const slotEvent = byColumn.get(col) || null;
+    const isSelected = slotEvent ? selectedEventId === slotEvent.layout.event.id : false;
+    
+    columns.push(
+      <EventColumn
+        key={col}
+        slotEvent={slotEvent}
+        isSelected={isSelected}
+        isFocused={isFocused}
+        width={COLUMN_WIDTH}
+      />
+    );
+  }
+  
+  // Grid line character and color
+  let gridChar = isHourStart ? "┼" : "│";
+  let gridColor = hasOverlap ? theme.accent.warning : theme.text.dim;
+  
+  if (isNowSlot) {
+    gridChar = "◀"; // Current time indicator pointing at events
+    gridColor = theme.accent.error;
+  }
   
   return (
-    <Box style={{ flexDirection: "column" }}>
-      {/* Main hour row */}
-      <Box style={{ flexDirection: "row" }}>
-        {/* Hour label */}
-        <Box style={{ width: HOUR_LABEL_WIDTH }}>
+    <Box style={{ flexDirection: "row" }}>
+      {/* Hour label */}
+      <Box style={{ width: HOUR_LABEL_WIDTH }}>
+        {isHourStart ? (
           <Text style={{ color: theme.text.dim }}>
             {formatHourLabel(hour).padStart(HOUR_LABEL_WIDTH - 1)}
           </Text>
-        </Box>
-        
-        {/* Grid line - highlight if there are overlapping events */}
-        <Text style={{ 
-          color: isNowHour 
-            ? theme.accent.error 
-            : hasMultiple 
-            ? theme.accent.warning 
-            : theme.text.dim 
-        }}>
-          {isNowHour ? "┃" : hasMultiple ? "┃" : "│"}
-        </Text>
-        
-        {/* First event */}
-        <Box style={{ flexGrow: 1, paddingLeft: 1 }}>
-          {activeEvents[0] ? (
-            <EventRow
-              layout={activeEvents[0]}
-              isSelected={selectedEventId === activeEvents[0].event.id}
-              isFocused={isFocused}
-              isContinuation={continuing.includes(activeEvents[0])}
-            />
-          ) : null}
-        </Box>
+        ) : isNowSlot ? (
+          <Text style={{ color: theme.accent.error, bold: true }}>
+            {"now".padStart(HOUR_LABEL_WIDTH - 1)}
+          </Text>
+        ) : null}
       </Box>
       
-      {/* Additional events (showing overlap) */}
-      {activeEvents.slice(1).map((layout) => (
-        <Box key={layout.event.id} style={{ flexDirection: "row" }}>
-          <Box style={{ width: HOUR_LABEL_WIDTH }} />
-          <Text style={{ color: theme.accent.warning }}>┃</Text>
-          <Box style={{ flexGrow: 1, paddingLeft: 1 }}>
-            <EventRow
-              layout={layout}
-              isSelected={selectedEventId === layout.event.id}
-              isFocused={isFocused}
-              isContinuation={continuing.includes(layout)}
-            />
-          </Box>
-        </Box>
-      ))}
+      {/* Grid line with current time indicator */}
+      <Text style={{ color: gridColor, bold: isNowSlot }}>
+        {gridChar}
+      </Text>
+      
+      {/* Event columns */}
+      <Box style={{ flexDirection: "row", paddingLeft: 1 }}>
+        {columns}
+      </Box>
     </Box>
   );
 }
@@ -300,28 +300,23 @@ function AllDayBar({
     <Box style={{ paddingBottom: 1 }}>
       {events.map((event) => {
         const isSelected = selectedEventId === event.id;
-        const color = getEventTypeColor(event);
+        const eventColor = getEventTypeColor(event);
+        const isHighlighted = isSelected && isFocused;
+        const bgColor = isHighlighted ? theme.selection.background : undefined;
+        const textColor = isHighlighted ? theme.selection.text : eventColor;
+        
         return (
           <Box key={event.id} style={{ flexDirection: "row" }}>
             <Box style={{ width: HOUR_LABEL_WIDTH }}>
               <Text style={{ color: theme.text.dim }}>all-day</Text>
             </Box>
             <Text style={{ color: theme.text.dim }}>│</Text>
-            <Box style={{ paddingLeft: 1, flexDirection: "row", gap: 1 }}>
-              <Text
-                style={{
-                  color: isSelected && isFocused ? theme.selection.indicator : color,
-                  bold: isSelected && isFocused,
-                }}
-              >
-                {isSelected && isFocused ? "▸" : "○"}
+            <Box style={{ paddingLeft: 1, flexDirection: "row", bg: bgColor }}>
+              <Text style={{ color: textColor, bold: isHighlighted }}>
+                {isHighlighted ? "▸" : "○"}
               </Text>
-              <Text
-                style={{
-                  color: isSelected && isFocused ? theme.selection.indicator : color,
-                  bold: isSelected && isFocused,
-                }}
-              >
+              <Text> </Text>
+              <Text style={{ color: textColor, bold: isHighlighted }}>
                 {getDisplayTitle(event)}
               </Text>
             </Box>
@@ -342,33 +337,46 @@ export function Timeline() {
   const isFocused = focus === "timeline";
   const isTodayView = isToday(selectedDay);
   const nowMinutes = isTodayView ? getNowMinutes() : -1;
-  const nowHour = Math.floor(nowMinutes / 60);
+  const nowSlot = nowMinutes >= 0 ? minutesToSlot(nowMinutes) : -1;
   
-  // Calculate scroll position
   const scrollOffset = useMemo(() => {
     if (selectedEventId) {
       const selectedLayout = layout.timedEvents.find(
         (l) => l.event.id === selectedEventId
       );
       if (selectedLayout) {
-        const hour = Math.floor(selectedLayout.startMinutes / 60);
-        return Math.max(0, hour - 2);
+        const slot = minutesToSlot(selectedLayout.startMinutes);
+        return Math.max(0, slot - 8);
       }
     }
-    if (isTodayView && nowHour >= 0) {
-      return Math.max(0, nowHour - 2);
+    if (isTodayView && nowSlot >= 0) {
+      return Math.max(0, nowSlot - 8);
     }
-    return 7; // Default to 7 AM visible
-  }, [selectedEventId, layout.timedEvents, isTodayView, nowHour]);
+    return 7 * SLOTS_PER_HOUR;
+  }, [selectedEventId, layout.timedEvents, isTodayView, nowSlot]);
   
-  // Auto-select first event when day changes
+  // Auto-select event closest to current time (for today) or first event (for other days)
   useEffect(() => {
-    const firstEvent = events[0];
     const hasValidSelection = selectedEventId && events.some((e) => e.id === selectedEventId);
-    if (firstEvent && !hasValidSelection) {
-      setSelectedEventId(firstEvent.id);
+    
+    if (!hasValidSelection && events.length > 0) {
+      if (isTodayView && nowMinutes >= 0) {
+        // For today: select event nearest to current time
+        const nearestEvent = findNearestEvent(layout, nowMinutes);
+        if (nearestEvent) {
+          setSelectedEventId(nearestEvent.id);
+        }
+      } else {
+        // For other days: select first event
+        const firstEvent = events[0];
+        if (firstEvent) {
+          setSelectedEventId(firstEvent.id);
+        }
+      }
     }
-  }, [events, selectedEventId, setSelectedEventId]);
+  }, [events, selectedEventId, setSelectedEventId, isTodayView, nowMinutes, layout]);
+  
+  const totalSlots = 24 * SLOTS_PER_HOUR;
   
   return (
     <Box
@@ -403,16 +411,16 @@ export function Timeline() {
         </FocusScope>
       )}
       
-      {/* Hour grid - full 24 hours */}
+      {/* Timeline grid */}
       <ScrollView style={{ flexGrow: 1 }} scrollOffset={scrollOffset}>
-        {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
-          <HourBlock
-            key={hour}
-            hour={hour}
+        {Array.from({ length: totalSlots }, (_, i) => i).map((slotIndex) => (
+          <SlotRow
+            key={slotIndex}
+            slotIndex={slotIndex}
             allEvents={layout.timedEvents}
             selectedEventId={selectedEventId}
             isFocused={isFocused}
-            isNowHour={isTodayView && nowHour === hour}
+            isNowSlot={nowSlot === slotIndex}
           />
         ))}
       </ScrollView>
