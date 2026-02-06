@@ -7,6 +7,7 @@ import { eventsRepo } from "../db/eventsRepo.ts";
 import {
   eventsAtom,
   selectedDayAtom,
+  viewAnchorDayAtom,
   focusAtom,
   selectedEventIdAtom,
   timelineScrollAtom,
@@ -94,41 +95,57 @@ export const toggleFocusAtom = atom(null, (get, set) => {
 // ===== Navigation Actions =====
 
 // Move day selection (for sidebar)
+// Also shifts the visible range when selection goes near edges
 export const moveDaySelectionAtom = atom(
   null,
   (get, set, direction: "up" | "down" | "start" | "end") => {
     const selectedDay = get(selectedDayAtom);
+    const anchor = get(viewAnchorDayAtom);
     
+    let newDay: DateTime;
     switch (direction) {
       case "up":
-        set(selectedDayAtom, selectedDay.minus({ days: 1 }));
+        newDay = selectedDay.minus({ days: 1 });
         break;
       case "down":
-        set(selectedDayAtom, selectedDay.plus({ days: 1 }));
+        newDay = selectedDay.plus({ days: 1 });
         break;
       case "start":
-        set(selectedDayAtom, selectedDay.minus({ days: 7 }));
+        newDay = selectedDay.minus({ days: 7 });
         break;
       case "end":
-        set(selectedDayAtom, selectedDay.plus({ days: 7 }));
+        newDay = selectedDay.plus({ days: 7 });
         break;
+      default:
+        return;
+    }
+    
+    set(selectedDayAtom, newDay);
+    
+    // Shift anchor if new day is outside visible range (±7 days from anchor)
+    const diffFromAnchor = newDay.diff(anchor, "days").days;
+    if (diffFromAnchor > 6) {
+      // Selection went past the end - shift anchor forward
+      set(viewAnchorDayAtom, newDay.minus({ days: 6 }));
+    } else if (diffFromAnchor < -6) {
+      // Selection went past the start - shift anchor backward
+      set(viewAnchorDayAtom, newDay.plus({ days: 6 }));
     }
   }
 );
 
-// Select day and focus timeline
+// Select day and focus timeline (pass explicit day)
 export const selectDayAtom = atom(null, (get, set, day: DateTime) => {
   set(selectedDayAtom, day.startOf("day"));
   set(focusAtom, "timeline");
   set(selectedEventIdAtom, null);
-  
-  // Auto-select first event if any
-  const layout = get(dayLayoutAtom);
-  const events = [...layout.allDayEvents, ...layout.timedEvents.map(t => t.event)];
-  const firstEvent = events[0];
-  if (firstEvent) {
-    set(selectedEventIdAtom, firstEvent.id);
-  }
+});
+
+// Confirm current day selection and focus timeline (reads current selectedDay internally)
+export const confirmDaySelectionAtom = atom(null, (get, set) => {
+  // Just switch focus - selectedDayAtom is already set by navigation
+  set(focusAtom, "timeline");
+  set(selectedEventIdAtom, null);
 });
 
 // Move event selection in timeline

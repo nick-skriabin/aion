@@ -20,10 +20,9 @@ export interface TimedEventLayout {
   hourBucketEnd: number; // 0-23
   durationMinutes: number;
   offsetInHour: number; // minutes past the hour start
-  hasOverlap: boolean;
-  overlapGroup: number; // for grouping overlapping events
-  overlapIndex: number; // position within overlap group
-  overlapCount: number; // total in overlap group
+  // Column layout for overlapping events
+  column: number; // 0-indexed column position
+  totalColumns: number; // total columns in this overlap group
 }
 
 // Layout result for a day
@@ -66,8 +65,13 @@ export function layoutDay(
     }
   }
 
-  // Sort timed events by start time
-  timedEventsRaw.sort((a, b) => a.start.toMillis() - b.start.toMillis());
+  // Sort timed events by start time, then by duration (longer first)
+  timedEventsRaw.sort((a, b) => {
+    const startDiff = a.start.toMillis() - b.start.toMillis();
+    if (startDiff !== 0) return startDiff;
+    // Longer events first for better visual layout
+    return b.end.toMillis() - b.start.toMillis() - (a.end.toMillis() - a.start.toMillis());
+  });
 
   // Compute layout info for each timed event
   const timedLayouts: TimedEventLayout[] = [];
@@ -91,20 +95,18 @@ export function layoutDay(
     timedLayouts.push({
       event,
       startMinutes,
-      endMinutes: endMinutes === 0 ? dayEndMinutes : endMinutes, // Handle midnight wrap
+      endMinutes: endMinutes === 0 ? dayEndMinutes : endMinutes,
       hourBucketStart,
       hourBucketEnd: endMinutes === 0 ? 23 : hourBucketEnd,
       durationMinutes: getDurationMinutes(eventDayStart, eventDayEnd),
       offsetInHour,
-      hasOverlap: false,
-      overlapGroup: 0,
-      overlapIndex: 0,
-      overlapCount: 1,
+      column: 0,
+      totalColumns: 1,
     });
   }
 
-  // Detect overlaps
-  detectOverlaps(timedLayouts);
+  // Assign columns for overlapping events
+  assignColumns(timedLayouts);
 
   // Group by hour bucket
   const hourBuckets = new Map<number, TimedEventLayout[]>();
@@ -113,7 +115,6 @@ export function layoutDay(
   }
 
   for (const layout of timedLayouts) {
-    // Add to the start hour bucket
     const bucket = hourBuckets.get(layout.hourBucketStart);
     if (bucket) {
       bucket.push(layout);
@@ -129,64 +130,85 @@ export function layoutDay(
   };
 }
 
-// Detect and mark overlapping events
-function detectOverlaps(layouts: TimedEventLayout[]): void {
+// Check if two events overlap in time
+function eventsOverlap(a: TimedEventLayout, b: TimedEventLayout): boolean {
+  return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
+}
+
+// Assign columns to overlapping events using a greedy algorithm
+function assignColumns(layouts: TimedEventLayout[]): void {
   if (layouts.length === 0) return;
 
-  let currentGroup = 0;
-  const groups: TimedEventLayout[][] = [];
+  // Find all overlap clusters
+  const clusters: TimedEventLayout[][] = [];
+  const assigned = new Set<TimedEventLayout>();
 
-  // Sort by start time
-  const sorted = [...layouts].sort(
-    (a, b) => a.startMinutes - b.startMinutes
-  );
+  for (const layout of layouts) {
+    if (assigned.has(layout)) continue;
 
-  let currentGroupLayouts: TimedEventLayout[] = [];
-  let groupEnd = 0;
+    // Find all events that overlap with this one (transitively)
+    const cluster: TimedEventLayout[] = [];
+    const queue: TimedEventLayout[] = [layout];
 
-  for (const layout of sorted) {
-    if (currentGroupLayouts.length === 0) {
-      // Start new group
-      currentGroupLayouts.push(layout);
-      groupEnd = layout.endMinutes;
-    } else if (layout.startMinutes < groupEnd) {
-      // Overlaps with current group
-      currentGroupLayouts.push(layout);
-      groupEnd = Math.max(groupEnd, layout.endMinutes);
-    } else {
-      // No overlap, save current group and start new
-      if (currentGroupLayouts.length > 1) {
-        groups.push(currentGroupLayouts);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (assigned.has(current)) continue;
+
+      assigned.add(current);
+      cluster.push(current);
+
+      // Find all overlapping events
+      for (const other of layouts) {
+        if (!assigned.has(other) && eventsOverlap(current, other)) {
+          queue.push(other);
+        }
       }
-      currentGroupLayouts = [layout];
-      groupEnd = layout.endMinutes;
-      currentGroup++;
+    }
+
+    if (cluster.length > 0) {
+      clusters.push(cluster);
     }
   }
 
-  // Don't forget last group
-  if (currentGroupLayouts.length > 1) {
-    groups.push(currentGroupLayouts);
-  }
+  // Assign columns within each cluster
+  for (const cluster of clusters) {
+    // Sort by start time, then by duration (longer first)
+    cluster.sort((a, b) => {
+      const startDiff = a.startMinutes - b.startMinutes;
+      if (startDiff !== 0) return startDiff;
+      return b.durationMinutes - a.durationMinutes;
+    });
 
-  // Mark overlapping events
-  for (let g = 0; g < groups.length; g++) {
-    const group = groups[g];
-    if (!group) continue;
-    for (let i = 0; i < group.length; i++) {
-      const item = group[i];
-      if (!item) continue;
-      item.hasOverlap = true;
-      item.overlapGroup = g;
-      item.overlapIndex = i;
-      item.overlapCount = group.length;
+    // Greedy column assignment
+    const columnEnds: number[] = []; // Track when each column becomes free
+
+    for (const layout of cluster) {
+      // Find the first column where this event fits
+      let col = 0;
+      while (col < columnEnds.length && columnEnds[col]! > layout.startMinutes) {
+        col++;
+      }
+
+      layout.column = col;
+      
+      // Update or add column end time
+      if (col < columnEnds.length) {
+        columnEnds[col] = layout.endMinutes;
+      } else {
+        columnEnds.push(layout.endMinutes);
+      }
+    }
+
+    // Set total columns for all events in cluster
+    const totalCols = columnEnds.length;
+    for (const layout of cluster) {
+      layout.totalColumns = totalCols;
     }
   }
 }
 
 // Get all events in chronological order (for j/k navigation)
 export function getChronologicalEvents(layout: DayLayout): GCalEvent[] {
-  // All-day events first, then timed events by start time
   return [
     ...layout.allDayEvents,
     ...layout.timedEvents.map((l) => l.event),

@@ -22,14 +22,8 @@ const TerminalColorSchema = z.enum([
 
 export type TerminalColor = z.infer<typeof TerminalColorSchema>;
 
-// Theme configuration schema
+// Theme configuration schema - minimal, inherits from terminal
 const ThemeSchema = z.object({
-  bg: z.object({
-    primary: TerminalColorSchema.default("black"),
-    secondary: TerminalColorSchema.default("black"),
-    selected: TerminalColorSchema.default("blue"),
-    hover: TerminalColorSchema.default("blackBright"),
-  }).default({}),
   text: z.object({
     primary: TerminalColorSchema.default("white"),
     secondary: TerminalColorSchema.default("whiteBright"),
@@ -47,15 +41,24 @@ const ThemeSchema = z.object({
     focusTime: TerminalColorSchema.default("blue"),
     birthday: TerminalColorSchema.default("yellow"),
   }).default({}),
-  border: z.object({
-    normal: TerminalColorSchema.default("blackBright"),
-    focus: TerminalColorSchema.default("cyan"),
+  selection: z.object({
+    indicator: TerminalColorSchema.default("cyan"),
+    text: TerminalColorSchema.default("white"),
   }).default({}),
   status: z.object({
     accepted: TerminalColorSchema.default("green"),
     declined: TerminalColorSchema.default("red"),
     tentative: TerminalColorSchema.default("yellow"),
     needsAction: TerminalColorSchema.default("blackBright"),
+  }).default({}),
+  modal: z.object({
+    background: TerminalColorSchema.default("black"),
+    border: TerminalColorSchema.default("blackBright"),
+  }).default({}),
+  input: z.object({
+    background: TerminalColorSchema.default("black"),
+    text: TerminalColorSchema.default("white"),
+    placeholder: TerminalColorSchema.default("blackBright"),
   }).default({}),
 }).default({});
 

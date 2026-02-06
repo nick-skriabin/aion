@@ -15,33 +15,23 @@ export function CommandBar() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: 3,
-          bg: theme.bg.secondary,
-          border: "single",
-          borderColor: theme.border.focus,
-          flexDirection: "column",
+          height: 1,
+          bg: theme.modal.background,
         }}
       >
         <FocusScope trap>
-          <Box style={{ flexDirection: "row", paddingX: 1, gap: 1 }}>
+          <Box style={{ flexDirection: "row", gap: 1, paddingX: 1 }}>
             <Text style={{ color: theme.accent.primary, bold: true }}>:</Text>
             <Input
               value={input}
               onChange={setInput}
-              placeholder="/new [title] - Create event"
-              style={{
-                flexGrow: 1,
-                color: theme.text.primary,
-              }}
-              focusedStyle={{
-                bg: theme.bg.secondary,
+              placeholder="/new [title]"
+              style={{ 
+                flexGrow: 1, 
+                color: theme.input.text,
+                bg: theme.input.background,
               }}
             />
-          </Box>
-          <Box style={{ paddingX: 1 }}>
-            <Text style={{ color: theme.text.dim, dim: true }}>
-              Enter to execute │ Esc to cancel
-            </Text>
           </Box>
         </FocusScope>
       </Box>

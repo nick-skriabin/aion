@@ -37,7 +37,10 @@ export interface EventAction {
 // All events keyed by ID
 export const eventsAtom = atom<Record<string, GCalEvent>>({});
 
-// Currently selected day
+// Anchor day for the visible days range (center of the list)
+export const viewAnchorDayAtom = atom<DateTime>(DateTime.now().startOf("day"));
+
+// Currently selected day (can move independently within the visible range)
 export const selectedDayAtom = atom<DateTime>(DateTime.now().startOf("day"));
 
 // Current focus context
@@ -102,10 +105,10 @@ export const dayLayoutAtom = atom((get): DayLayout => {
   return layoutDay(events, day, tz);
 });
 
-// Get days list for sidebar
+// Get days list for sidebar (uses anchor, not selected day)
 export const daysListAtom = atom((get) => {
-  const selectedDay = get(selectedDayAtom);
-  return getDaysRange(selectedDay, 7, 7); // 7 days before and after
+  const anchor = get(viewAnchorDayAtom);
+  return getDaysRange(anchor, 7, 7); // 7 days before and after
 });
 
 // Get selected day index in days list

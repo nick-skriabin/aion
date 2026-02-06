@@ -10,12 +10,6 @@ const CONFIG_PATH = join(CONFIG_DIR, "config.toml");
 export const DEFAULT_CONFIG_TOML = `# Aion Configuration
 # Place this file at ~/.aion/config.toml
 
-[theme.bg]
-primary = "black"
-secondary = "black"
-selected = "blue"
-hover = "blackBright"
-
 [theme.text]
 primary = "white"
 secondary = "whiteBright"
@@ -33,9 +27,9 @@ outOfOffice = "magenta"
 focusTime = "blue"
 birthday = "yellow"
 
-[theme.border]
-normal = "blackBright"
-focus = "cyan"
+[theme.selection]
+indicator = "cyan"
+text = "white"
 
 [theme.status]
 accepted = "green"

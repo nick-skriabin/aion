@@ -7,7 +7,7 @@ import { EventDialog } from "./EventDialog.tsx";
 import { ConfirmModal } from "./ConfirmModal.tsx";
 import { CommandBar } from "./CommandBar.tsx";
 import { KeyboardHandler } from "./KeyboardHandler.tsx";
-import { topOverlayAtom } from "../state/atoms.ts";
+import { topOverlayAtom, focusAtom } from "../state/atoms.ts";
 import { loadEventsAtom } from "../state/actions.ts";
 import { initDb } from "../db/db.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
@@ -20,26 +20,22 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const topOverlay = useAtomValue(topOverlayAtom);
+  const focus = useAtomValue(focusAtom);
   const loadEvents = useSetAtom(loadEventsAtom);
   
   // Initialize database and load events
   useEffect(() => {
     async function init() {
       try {
-        // Load config first
         await loadConfig();
-        
-        // Initialize database
         await initDb();
         
-        // Seed if empty
         const isEmpty = await eventsRepo.isEmpty();
         if (isEmpty) {
           const seedData = generateSeedData();
           await eventsRepo.seed(seedData);
         }
         
-        // Load events into state
         await loadEvents();
         setLoading(false);
       } catch (err) {
@@ -59,10 +55,9 @@ function AppContent() {
           height: "100%",
           justifyContent: "center",
           alignItems: "center",
-          bg: theme.bg.primary,
         }}
       >
-        <Spinner label="Loading Aion..." style={{ color: theme.accent.primary }} />
+        <Spinner label="Loading..." style={{ color: theme.accent.primary }} />
       </Box>
     );
   }
@@ -75,11 +70,10 @@ function AppContent() {
           height: "100%",
           justifyContent: "center",
           alignItems: "center",
-          bg: theme.bg.primary,
         }}
       >
         <Text style={{ color: theme.accent.error }}>Error: {error}</Text>
-        <Text style={{ color: theme.text.dim }}>Press Ctrl+C to exit</Text>
+        <Text style={{ color: theme.text.dim }}>Press q to exit</Text>
       </Box>
     );
   }
@@ -90,23 +84,16 @@ function AppContent() {
         width: "100%",
         height: "100%",
         flexDirection: "column",
-        bg: theme.bg.primary,
         padding: 1,
       }}
     >
       {/* Header */}
-      <Box
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          paddingBottom: 1,
-        }}
-      >
+      <Box style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <Text style={{ bold: true, color: theme.accent.primary }}>
-          🔮 Aion
+          Aion
         </Text>
         <Text style={{ color: theme.text.dim }}>
-          Tab:switch │ q:quit
+          h/l:pane  j/k:nav  q:quit
         </Text>
       </Box>
       

@@ -7,9 +7,6 @@ function getTheme() {
 
 // Theme accessor that reads from config
 export const theme = {
-  get bg() {
-    return getTheme().bg;
-  },
   get text() {
     return getTheme().text;
   },
@@ -19,34 +16,16 @@ export const theme = {
   get eventType() {
     return getTheme().eventType;
   },
-  get border() {
-    return getTheme().border;
+  get selection() {
+    return getTheme().selection;
   },
   get status() {
     return getTheme().status;
   },
-};
-
-// Style helpers
-export const styles = {
-  get panel() {
-    return {
-      bg: theme.bg.secondary,
-      border: "round" as const,
-      borderColor: theme.border.normal,
-    };
+  get modal() {
+    return getTheme().modal;
   },
-  get panelFocused() {
-    return {
-      bg: theme.bg.secondary,
-      border: "round" as const,
-      borderColor: theme.border.focus,
-    };
-  },
-  get header() {
-    return {
-      color: theme.text.primary,
-      bold: true,
-    };
+  get input() {
+    return getTheme().input;
   },
 };

@@ -46,33 +46,32 @@ export function ConfirmModal() {
             inset: 0,
             justifyContent: "center",
             alignItems: "center",
-            bg: theme.bg.primary,
           }}
         >
           <Box
             style={{
-              width: 50,
-              bg: theme.bg.secondary,
-              border: "round",
-              borderColor: theme.border.focus,
-              padding: 1,
+              width: 45,
               flexDirection: "column",
               gap: 1,
+              padding: 1,
+              bg: theme.modal.background,
+              border: "single",
+              borderColor: theme.modal.border,
             }}
           >
             <FocusScope trap>
               <Text style={{ bold: true, color: theme.text.primary }}>
                 {isDelete ? "Delete recurring event" : "Edit recurring event"}
               </Text>
-              <Text style={{ color: theme.text.secondary }}>
-                This event is part of a series. {isDelete ? "Delete" : "Edit"}:
+              <Text style={{ color: theme.text.dim }}>
+                Apply to:
               </Text>
               
               <Radio
                 items={[
                   { label: "This event only", value: "this" as RecurrenceScope },
-                  { label: "This and following events", value: "following" as RecurrenceScope },
-                  { label: "All events in the series", value: "all" as RecurrenceScope },
+                  { label: "This and following", value: "following" as RecurrenceScope },
+                  { label: "All in series", value: "all" as RecurrenceScope },
                 ]}
                 value={selectedScope}
                 onChange={setSelectedScope}
@@ -89,25 +88,17 @@ export function ConfirmModal() {
                       continueEditWithScope(selectedScope);
                     }
                   }}
-                  style={{
-                    border: "single",
-                    borderColor: theme.accent.primary,
-                    paddingX: 2,
-                  }}
-                  focusedStyle={{ bg: theme.accent.primary }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.accent.primary, color: "black", bold: true }}
                 >
-                  <Text>Continue</Text>
+                  <Text>continue</Text>
                 </Button>
                 <Button
                   onPress={() => pop()}
-                  style={{
-                    border: "single",
-                    borderColor: theme.border.normal,
-                    paddingX: 2,
-                  }}
-                  focusedStyle={{ bg: theme.bg.hover }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.text.dim, color: "black" }}
                 >
-                  <Text>Cancel</Text>
+                  <Text>cancel</Text>
                 </Button>
               </Box>
             </FocusScope>
@@ -127,50 +118,41 @@ export function ConfirmModal() {
             inset: 0,
             justifyContent: "center",
             alignItems: "center",
-            bg: theme.bg.primary,
           }}
         >
           <Box
             style={{
-              width: 45,
-              bg: theme.bg.secondary,
-              border: "round",
-              borderColor: theme.accent.warning,
-              padding: 1,
+              width: 40,
               flexDirection: "column",
               gap: 1,
+              padding: 1,
+              bg: theme.modal.background,
+              border: "single",
+              borderColor: theme.modal.border,
             }}
           >
             <FocusScope trap>
               <Text style={{ bold: true, color: theme.accent.warning }}>
                 Notify attendees?
               </Text>
-              <Text style={{ color: theme.text.secondary }}>
-                This event has other attendees. Would you like to notify them?
+              <Text style={{ color: theme.text.dim }}>
+                This event has other participants.
               </Text>
               
               <Box style={{ flexDirection: "row", gap: 2, paddingTop: 1 }}>
                 <Button
                   onPress={() => continueDeleteWithNotify(true)}
-                  style={{
-                    border: "single",
-                    borderColor: theme.accent.success,
-                    paddingX: 2,
-                  }}
-                  focusedStyle={{ bg: theme.accent.success }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.accent.success, color: "black", bold: true }}
                 >
-                  <Text>Yes (y)</Text>
+                  <Text>[y]es</Text>
                 </Button>
                 <Button
                   onPress={() => continueDeleteWithNotify(false)}
-                  style={{
-                    border: "single",
-                    borderColor: theme.border.normal,
-                    paddingX: 2,
-                  }}
-                  focusedStyle={{ bg: theme.bg.hover }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.text.dim, color: "black" }}
                 >
-                  <Text>No (n)</Text>
+                  <Text>[n]o</Text>
                 </Button>
               </Box>
             </FocusScope>
@@ -190,66 +172,48 @@ export function ConfirmModal() {
             inset: 0,
             justifyContent: "center",
             alignItems: "center",
-            bg: theme.bg.primary,
           }}
         >
           <Box
             style={{
-              width: 45,
-              bg: theme.bg.secondary,
-              border: "round",
-              borderColor: theme.accent.error,
-              padding: 1,
+              width: 40,
               flexDirection: "column",
               gap: 1,
+              padding: 1,
+              bg: theme.modal.background,
+              border: "single",
+              borderColor: theme.modal.border,
             }}
           >
             <FocusScope trap>
               <Text style={{ bold: true, color: theme.accent.error }}>
-                Delete event?
-              </Text>
-              <Text style={{ color: theme.text.secondary }}>
-                Are you sure you want to delete "{eventTitle}"?
+                Delete "{eventTitle}"?
               </Text>
               
               {pendingAction?.scope && (
                 <Text style={{ color: theme.text.dim }}>
-                  Scope: {pendingAction.scope === "this"
-                    ? "This event only"
+                  scope: {pendingAction.scope === "this"
+                    ? "this event"
                     : pendingAction.scope === "following"
-                    ? "This and following"
-                    : "All in series"}
-                </Text>
-              )}
-              
-              {pendingAction?.notifyAttendees !== undefined && (
-                <Text style={{ color: theme.text.dim }}>
-                  Notify attendees: {pendingAction.notifyAttendees ? "Yes" : "No"}
+                    ? "this and following"
+                    : "all in series"}
                 </Text>
               )}
               
               <Box style={{ flexDirection: "row", gap: 2, paddingTop: 1 }}>
                 <Button
                   onPress={() => confirmDelete()}
-                  style={{
-                    border: "single",
-                    borderColor: theme.accent.error,
-                    paddingX: 2,
-                  }}
-                  focusedStyle={{ bg: theme.accent.error }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.accent.error, color: "black", bold: true }}
                 >
-                  <Text>Delete</Text>
+                  <Text>delete</Text>
                 </Button>
                 <Button
                   onPress={() => pop()}
-                  style={{
-                    border: "single",
-                    borderColor: theme.border.normal,
-                    paddingX: 2,
-                  }}
-                  focusedStyle={{ bg: theme.bg.hover }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.text.dim, color: "black" }}
                 >
-                  <Text>Cancel</Text>
+                  <Text>cancel</Text>
                 </Button>
               </Box>
             </FocusScope>

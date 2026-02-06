@@ -69,9 +69,76 @@ export function generateSeedData(): GCalEvent[] {
   const today = DateTime.now().startOf("day");
   const events: GCalEvent[] = [];
 
-  // ===== TODAY =====
+  // ===== TODAY - With overlapping events like the screenshot =====
 
-  // Morning standup (recurring)
+  // Long focus time block (10 AM - 3 PM) - like the screenshot
+  events.push(
+    createEvent(
+      "Focus Time",
+      today.set({ hour: 10, minute: 0 }),
+      today.set({ hour: 15, minute: 0 }),
+      {
+        eventType: "focusTime",
+        description: "Deep work block - no interruptions",
+      }
+    )
+  );
+
+  // Out of Office overlapping with Focus Time (1:15 PM - 3:30 PM)
+  events.push(
+    createEvent(
+      "Nick OOO",
+      today.set({ hour: 13, minute: 15 }),
+      today.set({ hour: 15, minute: 30 }),
+      {
+        eventType: "outOfOffice",
+        description: "Out for personal errand",
+      }
+    )
+  );
+
+  // Veterinary appointment overlapping (2 PM - 3 PM)
+  events.push(
+    createEvent(
+      "Veterinary",
+      today.set({ hour: 14, minute: 0 }),
+      today.set({ hour: 15, minute: 0 }),
+      {
+        location: "Pet Clinic, 456 Oak Ave",
+        description: "Annual checkup for Max",
+      }
+    )
+  );
+
+  // Meeting right after overlaps (3:30 PM - 4:20 PM)
+  events.push(
+    createEvent(
+      "Front-End Guild's Chapter",
+      today.set({ hour: 15, minute: 30 }),
+      today.set({ hour: 16, minute: 20 }),
+      {
+        description: "Weekly front-end engineering sync",
+        attendees: [
+          { email: "frontend@example.com", displayName: "FE Team", responseStatus: "accepted" },
+        ],
+        hangoutLink: "https://meet.google.com/fe-guild",
+      }
+    )
+  );
+
+  // Evening event
+  events.push(
+    createEvent(
+      "Gym",
+      today.set({ hour: 17, minute: 30 }),
+      today.set({ hour: 18, minute: 30 }),
+      {
+        location: "Fitness Center",
+      }
+    )
+  );
+
+  // Morning standup
   events.push(
     createEvent(
       "Daily Standup",
@@ -82,82 +149,9 @@ export function generateSeedData(): GCalEvent[] {
         attendees: [
           { email: "alice@example.com", displayName: "Alice Chen", responseStatus: "accepted" },
           { email: "bob@example.com", displayName: "Bob Smith", responseStatus: "accepted" },
-          { email: "you@example.com", displayName: "You", responseStatus: "accepted" },
         ],
         recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"],
         hangoutLink: "https://meet.google.com/abc-defg-hij",
-      }
-    )
-  );
-
-  // Focus time block
-  events.push(
-    createEvent(
-      "Deep Work: API Design",
-      today.set({ hour: 10, minute: 0 }),
-      today.set({ hour: 12, minute: 0 }),
-      {
-        eventType: "focusTime",
-        description: "Block for focused work on the new API endpoints.\n\nNo interruptions please!",
-      }
-    )
-  );
-
-  // Lunch
-  events.push(
-    createEvent(
-      "Lunch with Sarah",
-      today.set({ hour: 12, minute: 30 }),
-      today.set({ hour: 13, minute: 30 }),
-      {
-        location: "Café Milano, 123 Main St",
-        attendees: [
-          { email: "sarah@example.com", displayName: "Sarah Johnson", responseStatus: "accepted" },
-        ],
-      }
-    )
-  );
-
-  // Overlapping meetings (to test overlap detection)
-  events.push(
-    createEvent(
-      "Design Review",
-      today.set({ hour: 14, minute: 0 }),
-      today.set({ hour: 15, minute: 0 }),
-      {
-        attendees: [
-          { email: "design@example.com", displayName: "Design Team", responseStatus: "accepted" },
-        ],
-        hangoutLink: "https://meet.google.com/xyz-uvwx-yz",
-      }
-    )
-  );
-
-  events.push(
-    createEvent(
-      "Quick 1:1 with Manager",
-      today.set({ hour: 14, minute: 30 }),
-      today.set({ hour: 15, minute: 0 }),
-      {
-        attendees: [
-          { email: "manager@example.com", displayName: "Pat Wilson", responseStatus: "tentative" },
-        ],
-      }
-    )
-  );
-
-  // Late afternoon
-  events.push(
-    createEvent(
-      "Code Review Session",
-      today.set({ hour: 16, minute: 0 }),
-      today.set({ hour: 17, minute: 0 }),
-      {
-        description: "Review PRs:\n- #1234 Auth refactor\n- #1235 Database migrations\n- #1236 UI improvements",
-        attendees: [
-          { email: "dev1@example.com", displayName: "Dev One", responseStatus: "accepted" },
-          { email: "dev2@example.com", displayName: "Dev Two", responseStatus: "needsAction" },
-        ],
       }
     )
   );
@@ -168,9 +162,9 @@ export function generateSeedData(): GCalEvent[] {
   // Birthday (all-day)
   events.push(
     createEvent(
-      "Emma's Birthday 🎂",
+      "Emma's Birthday",
       tomorrow,
-      tomorrow.plus({ days: 1 }), // End is exclusive for all-day
+      tomorrow.plus({ days: 1 }),
       {
         isAllDay: true,
         eventType: "birthday",
@@ -179,6 +173,7 @@ export function generateSeedData(): GCalEvent[] {
     )
   );
 
+  // Multiple overlapping meetings tomorrow
   events.push(
     createEvent(
       "Product Demo",
@@ -189,9 +184,22 @@ export function generateSeedData(): GCalEvent[] {
         description: "Demo the new features to stakeholders",
         attendees: [
           { email: "stakeholder@example.com", displayName: "Chris Davis", responseStatus: "accepted" },
-          { email: "product@example.com", displayName: "Product Team", responseStatus: "accepted" },
         ],
         hangoutLink: "https://meet.google.com/demo-call",
+      }
+    )
+  );
+
+  events.push(
+    createEvent(
+      "Investor Call",
+      tomorrow.set({ hour: 11, minute: 30 }),
+      tomorrow.set({ hour: 12, minute: 30 }),
+      {
+        description: "Q4 results discussion",
+        attendees: [
+          { email: "cfo@example.com", displayName: "CFO", responseStatus: "accepted" },
+        ],
       }
     )
   );
@@ -202,11 +210,8 @@ export function generateSeedData(): GCalEvent[] {
       tomorrow.set({ hour: 15, minute: 0 }),
       tomorrow.set({ hour: 16, minute: 30 }),
       {
-        description: "Sprint retrospective - what went well, what could be improved?",
+        description: "Sprint retrospective",
         recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=FR"],
-        attendees: [
-          { email: "team@example.com", displayName: "Engineering Team", responseStatus: "accepted" },
-        ],
       }
     )
   );
@@ -214,7 +219,6 @@ export function generateSeedData(): GCalEvent[] {
   // ===== DAY AFTER TOMORROW =====
   const dayAfter = today.plus({ days: 2 });
 
-  // Out of office
   events.push(
     createEvent(
       "Doctor Appointment",
@@ -223,21 +227,44 @@ export function generateSeedData(): GCalEvent[] {
       {
         eventType: "outOfOffice",
         location: "City Medical Center",
-        description: "Annual checkup",
       }
     )
   );
 
+  // Three overlapping meetings
   events.push(
     createEvent(
       "Architecture Discussion",
       dayAfter.set({ hour: 13, minute: 0 }),
       dayAfter.set({ hour: 14, minute: 30 }),
       {
-        description: "Discuss microservices vs monolith for the new project",
+        description: "Microservices vs monolith",
         attendees: [
           { email: "architect@example.com", displayName: "Tech Lead", responseStatus: "accepted" },
-          { email: "senior@example.com", displayName: "Senior Dev", responseStatus: "declined" },
+        ],
+      }
+    )
+  );
+
+  events.push(
+    createEvent(
+      "Code Review",
+      dayAfter.set({ hour: 13, minute: 30 }),
+      dayAfter.set({ hour: 14, minute: 0 }),
+      {
+        description: "Review PR #1234",
+      }
+    )
+  );
+
+  events.push(
+    createEvent(
+      "Quick Sync",
+      dayAfter.set({ hour: 13, minute: 45 }),
+      dayAfter.set({ hour: 14, minute: 15 }),
+      {
+        attendees: [
+          { email: "pm@example.com", displayName: "PM", responseStatus: "tentative" },
         ],
       }
     )
@@ -270,24 +297,6 @@ export function generateSeedData(): GCalEvent[] {
     )
   );
 
-  // ===== 3 DAYS AGO =====
-  const threeDaysAgo = today.minus({ days: 3 });
-
-  events.push(
-    createEvent(
-      "Project Kickoff",
-      threeDaysAgo.set({ hour: 9, minute: 0 }),
-      threeDaysAgo.set({ hour: 10, minute: 30 }),
-      {
-        description: "Kick off the new Aion project",
-        attendees: [
-          { email: "pm@example.com", displayName: "Project Manager", responseStatus: "accepted" },
-          { email: "designer@example.com", displayName: "UX Designer", responseStatus: "accepted" },
-        ],
-      }
-    )
-  );
-
   // ===== NEXT WEEK =====
   const nextWeek = today.plus({ days: 5 });
 
@@ -299,7 +308,7 @@ export function generateSeedData(): GCalEvent[] {
       {
         isAllDay: true,
         location: "Mountain View Office",
-        description: "Annual team building event",
+        description: "Annual team building",
       }
     )
   );
@@ -311,7 +320,7 @@ export function generateSeedData(): GCalEvent[] {
       nextWeek.set({ hour: 16, minute: 0 }),
       {
         eventType: "focusTime",
-        description: "Prepare slides for the upcoming tech conference",
+        description: "Prepare slides",
       }
     )
   );
