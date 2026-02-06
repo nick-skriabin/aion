@@ -13,6 +13,7 @@ export type KeybindScope = FocusContext | "global";
 export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
   global: [
     { key: "?", display: "?", description: "Show keyboard shortcuts", action: "openHelp" },
+    { key: "shift+n", display: "N", description: "Open notifications", action: "openNotifications" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "q", display: "q", description: "Quit application", action: "quit" },
@@ -74,6 +75,17 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "y", display: "y", description: "Confirm / Yes", action: "confirm" },
     { key: "n", display: "n", description: "Cancel / No", action: "cancel" },
     { key: "escape", display: "Esc", description: "Cancel", action: "cancel" },
+  ],
+
+  notifications: [
+    { key: "j", display: "j / ↓", description: "Next invite", action: "next" },
+    { key: "down", display: "j / ↓", description: "Next invite", action: "next" },
+    { key: "k", display: "k / ↑", description: "Previous invite", action: "prev" },
+    { key: "up", display: "k / ↑", description: "Previous invite", action: "prev" },
+    { key: "y", display: "y", description: "Accept invite", action: "accept" },
+    { key: "n", display: "n", description: "Decline invite", action: "decline" },
+    { key: "m", display: "m", description: "Maybe / Tentative", action: "tentative" },
+    { key: "escape", display: "Esc", description: "Close panel", action: "close" },
   ],
 };
 

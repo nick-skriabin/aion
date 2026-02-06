@@ -5,9 +5,10 @@ import { DayView } from "./DayView.tsx";
 import { DetailsPanel } from "./DetailsPanel.tsx";
 import { EventDialog } from "./EventDialog.tsx";
 import { ConfirmModal } from "./ConfirmModal.tsx";
-import { CommandBar } from "./CommandBar.tsx";
 import { KeyboardHandler } from "./KeyboardHandler.tsx";
 import { HelpDialog } from "./HelpDialog.tsx";
+import { StatusBar } from "./StatusBar.tsx";
+import { NotificationsPanel } from "./NotificationsPanel.tsx";
 import { overlayStackAtom } from "../state/atoms.ts";
 import { loadEventsAtom } from "../state/actions.ts";
 import { initDb } from "../db/db.ts";
@@ -30,10 +31,11 @@ function OverlayRenderer() {
             return <EventDialog key={`dialog-${index}`} />;
           case "confirm":
             return <ConfirmModal key={`confirm-${index}`} />;
-          case "command":
-            return <CommandBar key={`command-${index}`} />;
           case "help":
             return <HelpDialog key={`help-${index}`} />;
+          case "notifications":
+            return <NotificationsPanel key={`notifications-${index}`} />;
+          // "command" is now handled inline by StatusBar
           default:
             return null;
         }
@@ -109,11 +111,10 @@ function AppContent() {
         width: "100%",
         height: "100%",
         flexDirection: "column",
-        padding: 1,
       }}
     >
       {/* Header */}
-      <Box style={{ flexDirection: "row", justifyContent: "space-between" }}>
+      <Box style={{ flexDirection: "row", justifyContent: "space-between", paddingX: 1 }}>
         <Text style={{ bold: true, color: theme.accent.primary }}>
           Aion
         </Text>
@@ -123,7 +124,12 @@ function AppContent() {
       </Box>
       
       {/* Main content */}
-      <DayView />
+      <Box style={{ flexGrow: 1, flexShrink: 1, paddingX: 1 }}>
+        <DayView />
+      </Box>
+      
+      {/* Status bar */}
+      <StatusBar />
       
       {/* Keyboard handler */}
       <KeyboardHandler />

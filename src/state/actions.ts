@@ -478,6 +478,11 @@ export const openHelpAtom = atom(null, (get, set) => {
   set(pushOverlayAtom, { kind: "help" });
 });
 
+// Open notifications panel
+export const openNotificationsAtom = atom(null, (get, set) => {
+  set(pushOverlayAtom, { kind: "notifications" });
+});
+
 // ===== Data Loading =====
 
 // Load events from database

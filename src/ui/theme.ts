@@ -28,4 +28,10 @@ export const theme = {
   get input() {
     return getTheme().input;
   },
+  get statusBar() {
+    return getTheme().statusBar;
+  },
+  get calendarColors() {
+    return getTheme().calendarColors;
+  },
 };

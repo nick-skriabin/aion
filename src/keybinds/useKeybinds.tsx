@@ -16,9 +16,15 @@ interface KeyEvent {
 }
 
 /**
- * Parse a key string like "shift+d" or "ctrl+c" into components
+ * Parse a key string like "shift+d" or "ctrl+c" or "N" into components
+ * Uppercase single letters like "N" are treated as shift + lowercase
  */
 function parseKeyString(keyStr: string): { name: string; shift: boolean; ctrl: boolean } {
+  // Handle uppercase single letters (e.g., "N" means Shift+n)
+  if (keyStr.length === 1 && keyStr >= "A" && keyStr <= "Z") {
+    return { name: keyStr.toLowerCase(), shift: true, ctrl: false };
+  }
+  
   const parts = keyStr.toLowerCase().split("+");
   const name = parts[parts.length - 1];
   const shift = parts.includes("shift");

@@ -11,10 +11,11 @@ export type FocusContext =
   | "details"
   | "dialog"
   | "command"
-  | "confirm";
+  | "confirm"
+  | "notifications";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -142,4 +143,14 @@ export const hasOtherAttendeesAtom = atom((get) => {
   const event = get(selectedEventAtom);
   if (!event || !event.attendees) return false;
   return event.attendees.some((a) => !a.self && !a.organizer);
+});
+
+// Get all pending invites (events needing action)
+export const pendingInvitesAtom = atom((get) => {
+  const events = get(eventsArrayAtom);
+  return events.filter((event) => {
+    if (!event.attendees) return false;
+    const selfAttendee = event.attendees.find((a) => a.self);
+    return selfAttendee?.responseStatus === "needsAction";
+  });
 });

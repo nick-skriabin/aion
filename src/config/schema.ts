@@ -60,6 +60,18 @@ const ThemeSchema = z.object({
     text: TerminalColorSchema.default("white"),
     placeholder: TerminalColorSchema.default("blackBright"),
   }).default({}),
+  statusBar: z.object({
+    background: TerminalColorSchema.default("black"),
+    text: TerminalColorSchema.default("white"),
+  }).default({}),
+  calendarColors: z.record(z.string(), TerminalColorSchema).default({
+    "1": "blue",
+    "2": "green",
+    "3": "magenta",
+    "4": "red",
+    "5": "yellow",
+    "6": "cyan",
+  }),
 }).default({});
 
 // Full config schema

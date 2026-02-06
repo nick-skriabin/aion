@@ -6,7 +6,7 @@ import {
   selectedDayIndexAtom,
   focusAtom,
 } from "../state/atoms.ts";
-import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom } from "../state/actions.ts";
+import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom } from "../state/actions.ts";
 import { formatDayShort, isToday } from "../domain/time.ts";
 import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
 import { theme } from "./theme.ts";
@@ -15,6 +15,7 @@ function DaysKeybinds() {
   const moveDaySelection = useSetAtom(moveDaySelectionAtom);
   const toggleFocus = useSetAtom(toggleFocusAtom);
   const confirmDaySelection = useSetAtom(confirmDaySelectionAtom);
+  const openNotifications = useSetAtom(openNotificationsAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -28,7 +29,15 @@ function DaysKeybinds() {
     toggleFocus: () => toggleFocus(),
   }), [moveDaySelection, confirmDaySelection, toggleFocus]);
   
+  // Global keybind handlers (need to be handled here due to FocusScope trap)
+  const globalHandlers = useMemo(() => ({
+    openNotifications: () => openNotifications(),
+  }), [openNotifications]);
+  
   useInput((key) => {
+    // Handle global keybinds first (FocusScope trap would otherwise block them)
+    if (handleKeyEvent("global", key, globalHandlers)) return;
+    
     // Handle double-tap 'g' for first day (gg)
     if (key.name === "g" && !key.shift) {
       const now = Date.now();
@@ -47,7 +56,7 @@ function DaysKeybinds() {
       lastKeyRef.current = "";
     }
     
-    // Handle other keys through registry
+    // Handle scoped keys through registry
     handleKeyEvent("days", key, handlers);
   });
   

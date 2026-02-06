@@ -158,6 +158,42 @@ export function generateSeedData(): GCalEvent[] {
     )
   );
 
+  // NEW INVITE - needs action (user hasn't responded)
+  events.push(
+    createEvent(
+      "Product Review Meeting",
+      today.set({ hour: 11, minute: 0 }),
+      today.set({ hour: 12, minute: 0 }),
+      {
+        description: "Review Q1 product roadmap and priorities",
+        attendees: [
+          { email: "me@example.com", displayName: "Me", responseStatus: "needsAction", self: true },
+          { email: "pm@example.com", displayName: "Sarah PM", responseStatus: "accepted" },
+          { email: "design@example.com", displayName: "Design Team", responseStatus: "accepted" },
+        ],
+        hangoutLink: "https://meet.google.com/prod-review",
+      }
+    )
+  );
+
+  // Another NEW INVITE - needs action
+  events.push(
+    createEvent(
+      "1:1 with Manager",
+      today.set({ hour: 16, minute: 30 }),
+      today.set({ hour: 17, minute: 0 }),
+      {
+        description: "Weekly sync",
+        attendees: [
+          { email: "me@example.com", displayName: "Me", responseStatus: "needsAction", self: true },
+          { email: "manager@example.com", displayName: "Alex Manager", responseStatus: "accepted", organizer: true },
+        ],
+        hangoutLink: "https://meet.google.com/one-on-one",
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"],
+      }
+    )
+  );
+
   // Morning standup
   events.push(
     createEvent(
@@ -195,6 +231,23 @@ export function generateSeedData(): GCalEvent[] {
         isAllDay: true,
         eventType: "birthday",
         description: "Don't forget to send a card!",
+      }
+    )
+  );
+
+  // NEW INVITE for tomorrow - needs action
+  events.push(
+    createEvent(
+      "Team Lunch",
+      tomorrow.set({ hour: 12, minute: 30 }),
+      tomorrow.set({ hour: 13, minute: 30 }),
+      {
+        description: "Monthly team lunch at the new Italian place",
+        location: "Bella Italia, 123 Main St",
+        attendees: [
+          { email: "me@example.com", displayName: "Me", responseStatus: "needsAction", self: true },
+          { email: "team@example.com", displayName: "The Team", responseStatus: "accepted" },
+        ],
       }
     )
   );
