@@ -35,6 +35,10 @@ export const events = sqliteTable("events", {
   // Reminders
   remindersJson: text("reminders_json"), // JSON reminders object
   
+  // Multi-account support
+  accountEmail: text("account_email"), // Which account this event belongs to
+  calendarId: text("calendar_id"), // Which calendar this event belongs to
+  
   // Timestamps
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),

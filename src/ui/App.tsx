@@ -9,8 +9,8 @@ import { KeyboardHandler } from "./KeyboardHandler.tsx";
 import { HelpDialog } from "./HelpDialog.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { NotificationsPanel } from "./NotificationsPanel.tsx";
-import { overlayStackAtom } from "../state/atoms.ts";
-import { loadEventsAtom } from "../state/actions.ts";
+import { overlayStackAtom, isLoggedInAtom } from "../state/atoms.ts";
+import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
 import { initDb } from "../db/db.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
 import { generateSeedData } from "../domain/mock.ts";
@@ -49,6 +49,8 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadEvents = useSetAtom(loadEventsAtom);
+  const checkAuthStatus = useSetAtom(checkAuthStatusAtom);
+  const isLoggedIn = useAtomValue(isLoggedInAtom);
   
   // Initialize database and load events
   useEffect(() => {
@@ -56,6 +58,9 @@ function AppContent() {
       try {
         await loadConfig();
         await initDb();
+        
+        // Check auth status
+        await checkAuthStatus();
         
         const isEmpty = await eventsRepo.isEmpty();
         if (isEmpty) {
@@ -72,7 +77,7 @@ function AppContent() {
     }
     
     init();
-  }, [loadEvents]);
+  }, [loadEvents, checkAuthStatus]);
   
   if (loading) {
     return (
@@ -115,9 +120,16 @@ function AppContent() {
     >
       {/* Header */}
       <Box style={{ flexDirection: "row", justifyContent: "space-between", paddingX: 1 }}>
-        <Text style={{ bold: true, color: theme.accent.primary }}>
-          Aion
-        </Text>
+        <Box style={{ flexDirection: "row", gap: 2 }}>
+          <Text style={{ bold: true, color: theme.accent.primary }}>
+            Aion
+          </Text>
+          {isLoggedIn ? (
+            <Text style={{ color: theme.accent.success }}>●</Text>
+          ) : (
+            <Text style={{ color: theme.text.dim }}>○</Text>
+          )}
+        </Box>
         <Text style={{ color: theme.text.dim }}>
           ?:help  q:quit
         </Text>

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Box, Text, Portal, ScrollView, FocusScope, Keybind } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { selectedEventAtom, timezoneAtom, focusAtom } from "../state/atoms.ts";
@@ -15,11 +15,75 @@ import {
   formatReminder,
   type ResponseStatus,
 } from "../domain/gcalEvent.ts";
-import { getEventStart, getEventEnd, formatTimeRange, formatDayHeader } from "../domain/time.ts";
+import { getEventStart, getEventEnd, formatTimeRange, formatDayHeader, getLocalTimezone } from "../domain/time.ts";
 import { theme } from "./theme.ts";
 
 const LABEL_WIDTH = 8;
 const PANEL_WIDTH = 44;
+
+// Extract just the city/location from timezone (e.g., "Europe/Lisbon" -> "Lisbon")
+function formatTimezoneShort(tz: string): string {
+  const parts = tz.split("/");
+  // Get the last part and replace underscores with spaces
+  const location = parts[parts.length - 1].replace(/_/g, " ");
+  return location;
+}
+
+// Format UTC offset from minutes (e.g., 0 -> "UTC+0", -300 -> "UTC-5", 60 -> "UTC+1")
+function formatUtcOffset(offsetMinutes: number): string {
+  const hours = Math.floor(Math.abs(offsetMinutes) / 60);
+  const minutes = Math.abs(offsetMinutes) % 60;
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  if (minutes === 0) {
+    return `UTC${sign}${hours}`;
+  }
+  return `UTC${sign}${hours}:${minutes.toString().padStart(2, "0")}`;
+}
+
+// Meeting link patterns for various video conferencing services
+const MEETING_LINK_PATTERNS = [
+  /https?:\/\/meet\.google\.com\/[a-z-]+/i,                    // Google Meet
+  /https?:\/\/[a-z0-9-]*\.?zoom\.us\/[jw]\/\d+/i,              // Zoom
+  /https?:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s]+/i, // MS Teams
+  /https?:\/\/[a-z0-9-]+\.webex\.com\/[^\s]+/i,                // Webex
+  /https?:\/\/whereby\.com\/[^\s]+/i,                          // Whereby
+  /https?:\/\/[a-z0-9-]+\.chime\.aws\/[^\s]+/i,                // Amazon Chime
+  /https?:\/\/meet\.jit\.si\/[^\s]+/i,                         // Jitsi
+  /https?:\/\/app\.around\.co\/[^\s]+/i,                       // Around
+  /https?:\/\/[a-z0-9-]+\.gotowebinar\.com\/[^\s]+/i,          // GoToWebinar
+  /https?:\/\/[a-z0-9-]+\.gotomeeting\.com\/[^\s]+/i,          // GoToMeeting
+];
+
+// Extract meeting link from text (location, description, etc.)
+function extractMeetingLink(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  for (const pattern of MEETING_LINK_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) return match[0];
+  }
+  return undefined;
+}
+
+// Get meeting link from event (checks hangoutLink first, then location)
+function getMeetingLink(event: { hangoutLink?: string; location?: string }): string | undefined {
+  if (event.hangoutLink) return event.hangoutLink;
+  return extractMeetingLink(event.location);
+}
+
+// Get short label for meeting link type
+function getMeetingLinkLabel(url: string): string {
+  if (url.includes("meet.google.com")) return "meet";
+  if (url.includes("zoom.us")) return "zoom";
+  if (url.includes("teams.microsoft.com")) return "teams";
+  if (url.includes("webex.com")) return "webex";
+  if (url.includes("whereby.com")) return "whereby";
+  if (url.includes("chime.aws")) return "chime";
+  if (url.includes("jit.si")) return "jitsi";
+  if (url.includes("around.co")) return "around";
+  if (url.includes("gotomeeting.com")) return "gotomtg";
+  if (url.includes("gotowebinar.com")) return "gotowebinar";
+  return "link";
+}
 
 function getEventTypeColor(type: string | undefined) {
   switch (type) {
@@ -83,21 +147,33 @@ export function DetailsPanel() {
   const openEditDialog = useSetAtom(openEditDialogAtom);
   const initiateDelete = useSetAtom(initiateDeleteAtom);
   
+  // Toggle between local and original timezone
+  const [showOriginalTz, setShowOriginalTz] = useState(false);
+
   if (!event) return null;
   
   const title = getDisplayTitle(event);
   const allDay = isAllDay(event);
   const recurring = isRecurring(event);
-  const start = getEventStart(event, tz);
-  const end = getEventEnd(event, tz);
+
+  // Get meeting link from hangoutLink or location
+  const meetingLink = getMeetingLink(event);
+  const meetingLinkLabel = meetingLink ? getMeetingLinkLabel(meetingLink) : null;
+
+  // Get both timezones
+  const localTz = getLocalTimezone();
+  const originalTz = event.start.timeZone || localTz;
+  const hasOriginalTz = event.start.timeZone && event.start.timeZone !== localTz;
+
+  // Use selected timezone for display
+  const displayTz = showOriginalTz ? originalTz : localTz;
+  const start = getEventStart(event, displayTz);
+  const end = getEventEnd(event, displayTz);
   const typeColor = getEventTypeColor(event.eventType);
   
   const timeStr = allDay ? "All day" : formatTimeRange(start, end);
   const dateStr = formatDayHeader(start);
-  
-  // Get timezone from event or use default
-  const eventTimezone = event.start.timeZone || tz;
-  
+
   // Parse recurrence rule
   const recurrenceStr = parseRecurrenceRule(event.recurrence);
   
@@ -113,6 +189,13 @@ export function DetailsPanel() {
   
   const isActive = focus === "details";
   
+  // Toggle timezone display
+  const toggleTimezone = () => {
+    if (hasOriginalTz) {
+      setShowOriginalTz(!showOriginalTz);
+    }
+  };
+
   // Action handlers for keybinds
   const handlers = useMemo(() => ({
     acceptInvite: () => updateAttendance({ eventId: event.id, status: "accepted" }),
@@ -120,8 +203,9 @@ export function DetailsPanel() {
     tentativeInvite: () => updateAttendance({ eventId: event.id, status: "tentative" }),
     editEvent: () => openEditDialog(),
     deleteEvent: () => initiateDelete(),
-    openMeetingLink: event.hangoutLink ? () => Bun.spawn(["open", event.hangoutLink!]) : undefined,
-  }), [event.id, event.hangoutLink, updateAttendance, openEditDialog, initiateDelete]);
+    openMeetingLink: meetingLink ? () => Bun.spawn(["open", meetingLink]) : undefined,
+    toggleTimezone: hasOriginalTz ? toggleTimezone : undefined,
+  }), [event.id, meetingLink, updateAttendance, openEditDialog, initiateDelete, hasOriginalTz, showOriginalTz]);
   
   return (
     <Portal zIndex={10}>
@@ -179,12 +263,25 @@ export function DetailsPanel() {
               <Text style={{ color: theme.text.secondary }}>{timeStr}</Text>
             </Row>
             
-            {/* Timezone */}
-            {eventTimezone && (
+              {/* Timezone - interactive toggle */}
               <Row label="tz">
-                <Text style={{ color: theme.text.dim }}>{eventTimezone}</Text>
+                <Box style={{ flexDirection: "row", gap: 1 }}>
+                  <Text
+                    style={{
+                      color: hasOriginalTz
+                        ? (showOriginalTz ? theme.text.dim : theme.accent.primary)
+                        : theme.text.dim,
+                    }}
+                  >
+                    {formatTimezoneShort(displayTz)} {formatUtcOffset(start.offset)}
+                  </Text>
+                  {hasOriginalTz && (
+                    <Text style={{ color: theme.text.dim }}>
+                      t:{showOriginalTz ? "local" : "orig"}
+                    </Text>
+                  )}
+                </Box>
               </Row>
-            )}
             
             {/* Recurrence */}
             {recurrenceStr && (
@@ -212,11 +309,11 @@ export function DetailsPanel() {
               </Row>
             )}
             
-            {/* Links */}
-            {event.hangoutLink && (
-              <Row label="meet">
+              {/* Meeting Link */}
+              {meetingLink && (
+                <Row label={meetingLinkLabel || "link"}>
                 <Text style={{ color: theme.accent.primary }} wrap="truncate">
-                  {event.hangoutLink}
+                    {meetingLink}
                 </Text>
               </Row>
             )}
@@ -291,7 +388,7 @@ export function DetailsPanel() {
           <Box style={{ paddingTop: 1, flexDirection: "row", gap: 2 }}>
             <Text style={{ color: theme.text.dim }}>e:edit</Text>
             <Text style={{ color: theme.text.dim }}>D:delete</Text>
-            {event.hangoutLink && (
+            {meetingLink && (
               <Text style={{ color: theme.text.dim }}>o:open</Text>
             )}
           </Box>

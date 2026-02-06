@@ -2,6 +2,7 @@ import { join } from "path";
 import { homedir } from "os";
 import TOML from "@iarna/toml";
 import { ConfigSchema, type Config } from "./schema.ts";
+import { appLogger } from "../lib/logger.ts";
 
 const CONFIG_DIR = join(homedir(), ".aion");
 const CONFIG_PATH = join(CONFIG_DIR, "config.toml");
@@ -53,7 +54,7 @@ export async function loadConfig(): Promise<Config> {
       cachedConfig = ConfigSchema.parse({});
     }
   } catch (error) {
-    console.error("Failed to load config, using defaults:", error);
+    appLogger.warn("Failed to load config, using defaults", error);
     cachedConfig = ConfigSchema.parse({});
   }
 

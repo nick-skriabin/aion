@@ -92,6 +92,9 @@ export const GCalEventSchema = z.object({
   reminders: RemindersSchema.optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  // Multi-account support
+  accountEmail: z.string().optional(), // Which account this event belongs to
+  calendarId: z.string().optional(), // Which calendar this event belongs to
 });
 
 export type GCalEvent = z.infer<typeof GCalEventSchema>;

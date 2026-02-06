@@ -6,24 +6,25 @@ export function getLocalTimezone(): string {
   return DateTime.local().zoneName ?? "UTC";
 }
 
-// Parse a TimeObject to a Luxon DateTime
+// Parse a TimeObject to a Luxon DateTime in the target timezone
 export function parseTimeObject(
   time: TimeObject,
-  defaultTz: string = getLocalTimezone()
+  targetTz: string = getLocalTimezone()
 ): DateTime {
   if (time.dateTime) {
-    // Parse ISO datetime
-    const dt = DateTime.fromISO(time.dateTime, {
-      zone: time.timeZone || defaultTz,
-    });
-    return dt.isValid ? dt : DateTime.now();
+    // Parse ISO datetime in its original timezone, then convert to target timezone
+    const originalTz = time.timeZone || targetTz;
+    const dt = DateTime.fromISO(time.dateTime, { zone: originalTz });
+    if (!dt.isValid) return DateTime.now().setZone(targetTz);
+    // Convert to target timezone so display shows local time
+    return dt.setZone(targetTz);
   }
   if (time.date) {
-    // All-day event: parse as start of day in local timezone
-    const dt = DateTime.fromISO(time.date, { zone: defaultTz }).startOf("day");
-    return dt.isValid ? dt : DateTime.now();
+    // All-day event: parse as start of day in target timezone
+    const dt = DateTime.fromISO(time.date, { zone: targetTz }).startOf("day");
+    return dt.isValid ? dt : DateTime.now().setZone(targetTz);
   }
-  return DateTime.now();
+  return DateTime.now().setZone(targetTz);
 }
 
 // Create a TimeObject from DateTime

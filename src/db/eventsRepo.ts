@@ -3,11 +3,77 @@ import { getDb } from "./db.ts";
 import { events, type EventRow, type InsertEventRow } from "./schema.ts";
 import type { GCalEvent } from "../domain/gcalEvent.ts";
 
+/**
+ * Create a composite ID that's globally unique across all accounts and calendars.
+ * Format: accountEmail:calendarId:googleEventId
+ * 
+ * Google Calendar event IDs are only unique per calendar, not globally.
+ * The same event can appear in multiple calendars (shared calendars).
+ * This composite ensures uniqueness when syncing multiple accounts/calendars.
+ */
+export function makeCompositeId(
+  accountEmail: string | undefined, 
+  googleId: string,
+  calendarId?: string
+): string {
+  if (!accountEmail) {
+    // Local events without account - use as-is
+    return googleId;
+  }
+  if (!calendarId) {
+    return `${accountEmail}::${googleId}`;
+  }
+  return `${accountEmail}:${calendarId}:${googleId}`;
+}
+
+/**
+ * Extract the original Google event ID from a composite ID.
+ * Used when making API calls to Google Calendar.
+ * Format: accountEmail:calendarId:googleEventId or accountEmail::googleEventId
+ */
+export function extractGoogleId(compositeId: string): string {
+  // Find the last colon - everything after is the Google ID
+  const lastColonIndex = compositeId.lastIndexOf(":");
+  if (lastColonIndex === -1) {
+    return compositeId;
+  }
+  return compositeId.substring(lastColonIndex + 1);
+}
+
+/**
+ * Extract the account email from a composite ID.
+ */
+export function extractAccountEmail(compositeId: string): string | undefined {
+  const colonIndex = compositeId.indexOf(":");
+  if (colonIndex === -1) {
+    return undefined;
+  }
+  return compositeId.substring(0, colonIndex);
+}
+
+/**
+ * Check if an ID is already a composite ID (contains account email prefix)
+ */
+function isCompositeId(id: string): boolean {
+  // Composite IDs have format "email@domain.com:calendarId:googleId"
+  // or "email@domain.com::googleId" (no calendar)
+  // If it contains "@" before the first ":", it's likely composite
+  const colonIndex = id.indexOf(":");
+  if (colonIndex === -1) return false;
+  const beforeColon = id.substring(0, colonIndex);
+  return beforeColon.includes("@");
+}
+
 // Convert GCalEvent to database row
 function toRow(event: GCalEvent): InsertEventRow {
   const now = new Date().toISOString();
+  // Use composite ID for database primary key
+  // But don't double-composite if it's already a composite ID
+  const dbId = isCompositeId(event.id) 
+    ? event.id 
+    : makeCompositeId(event.accountEmail, event.id, event.calendarId);
   return {
-    id: event.id,
+    id: dbId,
     summary: event.summary,
     description: event.description ?? null,
     location: event.location ?? null,
@@ -30,6 +96,8 @@ function toRow(event: GCalEvent): InsertEventRow {
     organizerJson: event.organizer ? JSON.stringify(event.organizer) : null,
     hangoutLink: event.hangoutLink ?? null,
     remindersJson: event.reminders ? JSON.stringify(event.reminders) : null,
+    accountEmail: event.accountEmail ?? null,
+    calendarId: event.calendarId ?? null,
     createdAt: event.createdAt ?? now,
     updatedAt: event.updatedAt ?? now,
   };
@@ -37,6 +105,8 @@ function toRow(event: GCalEvent): InsertEventRow {
 
 // Convert database row to GCalEvent
 function fromRow(row: EventRow): GCalEvent {
+  // The database ID is the composite ID - use it as the event ID
+  // This ensures event.id is globally unique across all accounts
   return {
     id: row.id,
     summary: row.summary,
@@ -67,6 +137,8 @@ function fromRow(row: EventRow): GCalEvent {
     organizer: row.organizerJson ? JSON.parse(row.organizerJson) : undefined,
     hangoutLink: row.hangoutLink ?? undefined,
     reminders: row.remindersJson ? JSON.parse(row.remindersJson) : undefined,
+    accountEmail: row.accountEmail ?? undefined,
+    calendarId: row.calendarId ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

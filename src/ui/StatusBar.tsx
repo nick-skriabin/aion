@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Text, Input, Portal } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Portal, FocusScope } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom, useAtom } from "jotai";
 import { DateTime } from "luxon";
 import {
@@ -9,8 +9,11 @@ import {
   dayEventsAtom,
   eventsAtom,
   timezoneAtom,
+  messageAtom,
+  messageVisibleAtom,
+  type MessageType,
 } from "../state/atoms.ts";
-import { executeCommandAtom, popOverlayAtom } from "../state/actions.ts";
+import { executeCommandAtom, popOverlayAtom, dismissMessageAtom } from "../state/actions.ts";
 import { getDisplayTitle } from "../domain/gcalEvent.ts";
 import { getEventStart, formatTime } from "../domain/time.ts";
 import { getAllCommands } from "../keybinds/registry.ts";
@@ -157,19 +160,90 @@ function CommandInput() {
   }, [selectCommand, popOverlay, setSelectedIndex, filteredCommands.length]);
   
   return (
-    <Box style={{ flexDirection: "row", flexGrow: 1, alignItems: "center" }}>
-      <Text style={{ color: theme.accent.primary, bold: true }}>:</Text>
-      <Input
-        defaultValue=""
-        onChange={setInput}
-        onKeyPress={handleKeyPress}
-        autoFocus
-        style={{
-          flexGrow: 1,
-          bg: theme.input?.background,
-          color: theme.text.primary,
-        }}
-      />
+    <FocusScope trap>
+      <Box style={{ flexDirection: "row", flexGrow: 1, alignItems: "center" }}>
+        <Text style={{ color: theme.accent.primary, bold: true }}>:</Text>
+        <Input
+          key="command-input"
+          defaultValue=""
+          onChange={setInput}
+          onKeyPress={handleKeyPress}
+          autoFocus
+          style={{
+            flexGrow: 1,
+            bg: theme.input?.background,
+            color: theme.text.primary,
+          }}
+        />
+      </Box>
+    </FocusScope>
+  );
+}
+
+// Get color for message type
+function getMessageColor(type: MessageType): string {
+  switch (type) {
+    case "success":
+      return theme.accent.success;
+    case "warning":
+      return theme.accent.warning;
+    case "error":
+      return theme.accent.error;
+    case "progress":
+      return theme.accent.primary;
+    case "info":
+    default:
+      return theme.text.primary;
+  }
+}
+
+// Get prefix icon for message type
+function getMessagePrefix(type: MessageType): string {
+  switch (type) {
+    case "success":
+      return "✓ ";
+    case "warning":
+      return "⚠ ";
+    case "error":
+      return "✗ ";
+    case "progress":
+      return "⋯ ";
+    case "info":
+    default:
+      return "";
+  }
+}
+
+function MessageDisplay() {
+  const message = useAtomValue(messageAtom);
+  const isVisible = useAtomValue(messageVisibleAtom);
+  
+  if (!message || !isVisible) {
+    return null;
+  }
+  
+  const color = getMessageColor(message.type);
+  const prefix = getMessagePrefix(message.type);
+  
+  // Build progress indicator if present
+  let progressText = "";
+  if (message.progress) {
+    const { current, total, phase } = message.progress;
+    if (phase) {
+      progressText = ` [${phase}]`;
+    }
+    if (current !== undefined && total !== undefined) {
+      progressText = ` [${current}/${total}]`;
+    } else if (current !== undefined) {
+      progressText = ` [${current}]`;
+    }
+  }
+  
+  return (
+    <Box style={{ flexDirection: "row", flexGrow: 1 }}>
+      <Text style={{ color, bold: message.type === "error" }}>
+        {prefix}{message.text}{progressText}
+      </Text>
     </Box>
   );
 }
@@ -177,6 +251,13 @@ function CommandInput() {
 function NextEvent() {
   const events = useAtomValue(dayEventsAtom);
   const tz = useAtomValue(timezoneAtom);
+  const message = useAtomValue(messageAtom);
+  const isMessageVisible = useAtomValue(messageVisibleAtom);
+  
+  // Show message instead of next event if there's one
+  if (message && isMessageVisible) {
+    return <MessageDisplay />;
+  }
   
   // Always show next event based on current time
   const event = findClosestEvent(events, tz);

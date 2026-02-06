@@ -65,6 +65,12 @@ export async function initDb(): Promise<ReturnType<typeof drizzle<typeof schema>
   try {
     sqlite.exec(`ALTER TABLE events ADD COLUMN reminders_json TEXT;`);
   } catch { /* column already exists */ }
+  try {
+    sqlite.exec(`ALTER TABLE events ADD COLUMN account_email TEXT;`);
+  } catch { /* column already exists */ }
+  try {
+    sqlite.exec(`ALTER TABLE events ADD COLUMN calendar_id TEXT;`);
+  } catch { /* column already exists */ }
   
   db = drizzle(sqlite, { schema });
   return db;

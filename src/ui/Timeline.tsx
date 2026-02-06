@@ -7,6 +7,7 @@ import {
   focusAtom,
   selectedEventIdAtom,
   dayEventsAtom,
+  accountColorMapAtom,
 } from "../state/atoms.ts";
 import {
   toggleFocusAtom,
@@ -72,7 +73,20 @@ const SLOTS_PER_HOUR = 4;
 const MINUTES_PER_SLOT = 15;
 const COLUMN_WIDTH = 28;
 
-function getEventTypeColor(event: GCalEvent) {
+/**
+ * Get color for an event based on its account
+ * Falls back to event type color if no account
+ */
+function getEventColor(event: GCalEvent, accountColorMap: Record<string, number>): string {
+  // If event has an account, use the account color
+  if (event.accountEmail && accountColorMap[event.accountEmail]) {
+    const colorIndex = accountColorMap[event.accountEmail];
+    const colorKey = String(colorIndex) as keyof typeof theme.calendarColors;
+    const color = theme.calendarColors?.[colorKey];
+    if (color) return color;
+  }
+
+// Fallback to event type color
   switch (event.eventType) {
     case "outOfOffice":
       return theme.eventType.outOfOffice;
@@ -191,11 +205,13 @@ function EventColumn({
   isSelected,
   isFocused,
   width,
+  accountColorMap,
 }: {
   slotEvent: SlotEvent | null;
   isSelected: boolean;
   isFocused: boolean;
   width: number;
+    accountColorMap: Record<string, number>;
 }) {
   if (!slotEvent) {
     return <Box style={{ width }} />;
@@ -203,7 +219,7 @@ function EventColumn({
   
   const { layout, isStart } = slotEvent;
   const event = layout.event;
-  const eventColor = getEventTypeColor(event);
+  const eventColor = getEventColor(event, accountColorMap);
   const isHighlighted = isSelected && isFocused;
   const responseStatus = getSelfResponseStatus(event);
   const hasAttendees = (event.attendees?.length ?? 0) > 0;
@@ -257,12 +273,14 @@ function SlotRow({
   selectedEventId,
   isFocused,
   isNowSlot,
+  accountColorMap,
 }: {
   slotIndex: number;
   allEvents: TimedEventLayout[];
   selectedEventId: string | null;
   isFocused: boolean;
   isNowSlot: boolean;
+    accountColorMap: Record<string, number>;
 }) {
   const { byColumn, maxColumns } = getEventsForSlot(slotIndex, allEvents);
   const hour = Math.floor(slotIndex / SLOTS_PER_HOUR);
@@ -282,6 +300,7 @@ function SlotRow({
         isSelected={isSelected}
         isFocused={isFocused}
         width={COLUMN_WIDTH}
+        accountColorMap={accountColorMap}
       />
     );
   }
@@ -333,10 +352,12 @@ function AllDayBar({
   events,
   selectedEventId,
   isFocused,
+  accountColorMap,
 }: {
   events: GCalEvent[];
   selectedEventId: string | null;
   isFocused: boolean;
+    accountColorMap: Record<string, number>;
 }) {
   if (events.length === 0) return null;
   
@@ -344,7 +365,7 @@ function AllDayBar({
     <Box style={{ paddingBottom: 1 }}>
       {events.map((event) => {
         const isSelected = selectedEventId === event.id;
-        const eventColor = getEventTypeColor(event);
+        const eventColor = getEventColor(event, accountColorMap);
         const isHighlighted = isSelected && isFocused;
         const responseStatus = getSelfResponseStatus(event);
         const hasAttendees = (event.attendees?.length ?? 0) > 0;
@@ -388,11 +409,13 @@ function StickyEventHeaders({
   scrollOffset,
   selectedEventId,
   isFocused,
+  accountColorMap,
 }: {
   timedEvents: TimedEventLayout[];
   scrollOffset: number;
   selectedEventId: string | null;
   isFocused: boolean;
+    accountColorMap: Record<string, number>;
 }) {
   const visibleStartMinutes = scrollOffset * MINUTES_PER_SLOT;
   
@@ -410,7 +433,7 @@ function StickyEventHeaders({
         const event = layout.event;
         const isSelected = selectedEventId === event.id;
         const isHighlighted = isSelected && isFocused;
-        const eventColor = getEventTypeColor(event);
+        const eventColor = getEventColor(event, accountColorMap);
         const responseStatus = getSelfResponseStatus(event);
         const hasAttendees = (event.attendees?.length ?? 0) > 0;
         const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
@@ -449,6 +472,7 @@ export function Timeline() {
   const focus = useAtomValue(focusAtom);
   const [selectedEventId, setSelectedEventId] = useAtom(selectedEventIdAtom);
   const events = useAtomValue(dayEventsAtom);
+  const accountColorMap = useAtomValue(accountColorMapAtom);
   
   const isFocused = focus === "timeline";
   const isTodayView = isToday(selectedDay);
@@ -518,6 +542,7 @@ export function Timeline() {
         events={layout.allDayEvents}
         selectedEventId={selectedEventId}
         isFocused={isFocused}
+        accountColorMap={accountColorMap}
       />
       
       {/* Keybinds when focused */}
@@ -533,6 +558,7 @@ export function Timeline() {
         scrollOffset={scrollOffset}
         selectedEventId={selectedEventId}
         isFocused={isFocused}
+        accountColorMap={accountColorMap}
       />
       
       {/* Timeline grid */}
@@ -545,6 +571,7 @@ export function Timeline() {
             selectedEventId={selectedEventId}
             isFocused={isFocused}
             isNowSlot={nowSlot === slotIndex}
+            accountColorMap={accountColorMap}
           />
         ))}
       </ScrollView>

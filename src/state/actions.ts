@@ -19,10 +19,14 @@ import {
   pendingActionAtom,
   dayLayoutAtom,
   dayEventsAtom,
+  messageAtom,
+  messageVisibleAtom,
   type FocusContext,
   type Overlay,
   type OverlayKind,
   type RecurrenceScope,
+  type Message,
+  type MessageType,
 } from "./atoms.ts";
 
 // Helper to create action atoms
@@ -299,24 +303,85 @@ export const saveEventAtom = atom(null, async (get, set) => {
   if (!dialogEvent) return;
   
   const now = new Date().toISOString();
+  const { isLoggedInAtom } = await import("./atoms.ts");
+  const isLoggedIn = get(isLoggedInAtom);
   
   if (isEditMode && dialogEvent.id) {
     // Update existing event
-    const event: GCalEvent = {
+    let event: GCalEvent = {
       ...dialogEvent,
       updatedAt: now,
     } as GCalEvent;
+    
+    // Try to update on Google Calendar first if logged in
+    if (isLoggedIn && dialogEvent.accountEmail) {
+      try {
+        const { updateEvent } = await import("../api/calendar.ts");
+        const updatedEvent = await updateEvent(
+          dialogEvent.id,
+          {
+            summary: dialogEvent.summary,
+            description: dialogEvent.description,
+            location: dialogEvent.location,
+            start: dialogEvent.start,
+            end: dialogEvent.end,
+            attendees: dialogEvent.attendees,
+          },
+          dialogEvent.calendarId || "primary",
+          dialogEvent.accountEmail
+        );
+        event = { ...event, ...updatedEvent, updatedAt: now };
+        set(showMessageAtom, { text: "Event updated", type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        set(showMessageAtom, { text: `Update failed: ${message}`, type: "error" });
+        // Continue with local update anyway
+      }
+    }
     
     await eventsRepo.update(event);
     set(eventsAtom, (prev) => ({ ...prev, [event.id]: event }));
   } else {
     // Create new event
-    const event: GCalEvent = {
+    let event: GCalEvent = {
       ...dialogEvent,
       id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
     } as GCalEvent;
+    
+    // Try to create on Google Calendar first if logged in
+    if (isLoggedIn) {
+      try {
+        const { createEvent } = await import("../api/calendar.ts");
+        const { getDefaultAccount } = await import("../auth/index.ts");
+        
+        // Use default account for new events
+        const defaultAccount = await getDefaultAccount();
+        const accountEmail = defaultAccount?.account.email;
+        
+        if (accountEmail) {
+          const createdEvent = await createEvent(
+            {
+              summary: dialogEvent.summary,
+              description: dialogEvent.description,
+              location: dialogEvent.location,
+              start: dialogEvent.start,
+              end: dialogEvent.end,
+              attendees: dialogEvent.attendees,
+            },
+            "primary",
+            accountEmail
+          );
+          event = { ...event, ...createdEvent, createdAt: now, updatedAt: now };
+          set(showMessageAtom, { text: "Event created", type: "success" });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        set(showMessageAtom, { text: `Create failed: ${message}`, type: "error" });
+        // Continue with local create anyway
+      }
+    }
     
     await eventsRepo.create(event);
     set(eventsAtom, (prev) => ({ ...prev, [event.id]: event }));
@@ -394,6 +459,30 @@ export const confirmDeleteAtom = atom(null, async (get, set) => {
   const pending = get(pendingActionAtom);
   if (!pending) return;
   
+  const event = get(eventsAtom)[pending.eventId];
+  if (!event) return;
+  
+  const { isLoggedInAtom } = await import("./atoms.ts");
+  const isLoggedIn = get(isLoggedInAtom);
+  
+  // Try to delete on Google Calendar first if logged in
+  if (isLoggedIn && event.accountEmail) {
+    try {
+      const { deleteEvent } = await import("../api/calendar.ts");
+      await deleteEvent(
+        pending.eventId,
+        event.calendarId || "primary",
+        pending.notifyAttendees ?? false,
+        event.accountEmail
+      );
+      set(showMessageAtom, { text: "Event deleted", type: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      set(showMessageAtom, { text: `Delete failed: ${message}`, type: "error" });
+      // Continue with local delete anyway
+    }
+  }
+  
   // For v0, we just delete the event regardless of scope
   // In real implementation, scope would affect which instances to delete
   await eventsRepo.delete(pending.eventId);
@@ -421,6 +510,28 @@ export const updateAttendanceAtom = atom(
   async (get, set, { eventId, status }: { eventId: string; status: ResponseStatus }) => {
     const event = get(eventsAtom)[eventId];
     if (!event) return;
+    
+    const { isLoggedInAtom } = await import("./atoms.ts");
+    const isLoggedIn = get(isLoggedInAtom);
+    
+    // Try to update on Google Calendar first if logged in
+    if (isLoggedIn && event.accountEmail) {
+      try {
+        const { updateAttendance } = await import("../api/calendar.ts");
+        await updateAttendance(
+          eventId,
+          status as "accepted" | "declined" | "tentative",
+          event.calendarId || "primary",
+          event.accountEmail
+        );
+        const statusLabel = status === "accepted" ? "Accepted" : status === "declined" ? "Declined" : "Maybe";
+        set(showMessageAtom, { text: statusLabel, type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        set(showMessageAtom, { text: `RSVP failed: ${message}`, type: "error" });
+        // Continue with local update anyway
+      }
+    }
     
     // Find or create self attendee
     let attendees = event.attendees ? [...event.attendees] : [];
@@ -453,12 +564,84 @@ export const updateAttendanceAtom = atom(
   }
 );
 
+// ===== Message Actions (Vim-style messages) =====
+
+let messageIdCounter = 0;
+
+/**
+ * Show a message in the command bar area
+ * Returns the message ID for updates
+ */
+export const showMessageAtom = atom(
+  null,
+  (get, set, options: { text: string; type?: MessageType; autoDismiss?: number }) => {
+    const id = `msg-${++messageIdCounter}`;
+    const message: Message = {
+      id,
+      text: options.text,
+      type: options.type || "info",
+    };
+    
+    set(messageAtom, message);
+    set(messageVisibleAtom, true);
+    
+    // Auto-dismiss after timeout (default: don't auto-dismiss)
+    if (options.autoDismiss && options.autoDismiss > 0) {
+      setTimeout(() => {
+        const current = get(messageAtom);
+        if (current?.id === id) {
+          set(messageAtom, null);
+        }
+      }, options.autoDismiss);
+    }
+    
+    return id;
+  }
+);
+
+/**
+ * Update an existing message (for progress updates)
+ */
+export const updateMessageAtom = atom(
+  null,
+  (get, set, options: { 
+    text?: string; 
+    type?: MessageType;
+    progress?: Message["progress"];
+  }) => {
+    const current = get(messageAtom);
+    if (!current) return;
+    
+    set(messageAtom, {
+      ...current,
+      text: options.text ?? current.text,
+      type: options.type ?? current.type,
+      progress: options.progress !== undefined ? options.progress : current.progress,
+    });
+  }
+);
+
+/**
+ * Dismiss the current message
+ */
+export const dismissMessageAtom = atom(null, (get, set) => {
+  set(messageAtom, null);
+});
+
+/**
+ * Hide message visibility (when command bar opens)
+ */
+export const hideMessageAtom = atom(null, (get, set) => {
+  set(messageVisibleAtom, false);
+});
+
 // ===== Command Actions =====
 
 // Open command bar
 export const openCommandAtom = atom(null, (get, set) => {
   set(commandInputAtom, ""); // Reset input
   set(commandSelectedIndexAtom, 0); // Reset selection
+  set(messageVisibleAtom, false); // Hide any message when command bar opens
   set(pushOverlayAtom, { kind: "command" });
 });
 
@@ -498,6 +681,18 @@ export const executeCommandAtom = atom(null, (get, set) => {
     case "quit":
       process.exit(0);
       break;
+    case "login":
+      set(loginAtom);
+      break;
+    case "logout":
+      set(logoutAtom);
+      break;
+    case "sync":
+      set(syncAtom);
+      break;
+    case "accounts":
+      set(showAccountsAtom);
+      break;
     default:
       // Unknown action
       break;
@@ -529,4 +724,235 @@ export const loadEventsAtom = atom(null, async (get, set) => {
     eventsMap[event.id] = event;
   }
   set(eventsAtom, eventsMap);
+});
+
+// ===== Auth Actions =====
+
+// Login to Google Calendar (adds a new account)
+export const loginAtom = atom(null, async (get, set) => {
+  const { startLoginFlow, getAccounts } = await import("../auth/index.ts");
+  const { isLoggedInAtom, isAuthLoadingAtom, accountsAtom } = await import("./atoms.ts");
+  
+  set(isAuthLoadingAtom, true);
+  set(showMessageAtom, { text: "Opening browser for authentication...", type: "progress" });
+  
+  const result = await startLoginFlow({
+    onAuthUrl: () => {
+      set(updateMessageAtom, { text: "Waiting for Google sign-in...", type: "progress" });
+    },
+    onSuccess: (account) => {
+      set(showMessageAtom, { text: `Logged in as ${account.email}`, type: "success" });
+    },
+    onError: (error) => {
+      set(showMessageAtom, { text: `Login failed: ${error}`, type: "error" });
+    },
+  });
+  
+  set(isAuthLoadingAtom, false);
+  
+  if (result.success && result.account) {
+    // Refresh accounts list
+    const accounts = await getAccounts();
+    set(accountsAtom, accounts.map((a) => ({
+      email: a.account.email,
+      name: a.account.name,
+      picture: a.account.picture,
+    })));
+    set(isLoggedInAtom, accounts.length > 0);
+    
+    // Auto-sync after login
+    set(syncAtom);
+  }
+});
+
+// Logout from Google Calendar
+// If email is provided, logs out that specific account
+// Otherwise logs out all accounts
+export const logoutAtom = atom(null, async (get, set, email?: string) => {
+  const { logoutAccount, logoutAll, getAccounts, isLoggedIn } = await import("../auth/index.ts");
+  const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
+  
+  if (!(await isLoggedIn())) {
+    set(showMessageAtom, { text: "Not logged in", type: "warning" });
+    return;
+  }
+  
+  if (email) {
+    // Logout specific account
+    await logoutAccount(email);
+    set(showMessageAtom, { text: `Logged out: ${email}`, type: "info" });
+  } else {
+    // Logout all accounts
+    await logoutAll();
+    set(showMessageAtom, { text: "Logged out", type: "info" });
+  }
+  
+  // Refresh accounts list
+  const accounts = await getAccounts();
+  set(accountsAtom, accounts.map((a) => ({
+    email: a.account.email,
+    name: a.account.name,
+    picture: a.account.picture,
+  })));
+  set(isLoggedInAtom, accounts.length > 0);
+});
+
+// Sync events with Google Calendar (from all accounts)
+export const syncAtom = atom(null, async (get, set) => {
+  const { isLoggedIn, getAccounts } = await import("../auth/index.ts");
+  const { isAuthLoadingAtom, accountsAtom } = await import("./atoms.ts");
+  
+  if (!(await isLoggedIn())) {
+    set(showMessageAtom, { text: "Not logged in. Run 'login' first.", type: "warning" });
+    return;
+  }
+  
+  set(isAuthLoadingAtom, true);
+  
+  try {
+    const { fetchAllEvents } = await import("../api/calendar.ts");
+    
+    // Update accounts list
+    const accounts = await getAccounts();
+    set(accountsAtom, accounts.map((a) => ({
+      email: a.account.email,
+      name: a.account.name,
+      picture: a.account.picture,
+    })));
+    
+    set(showMessageAtom, { 
+      text: "Syncing...", 
+      type: "progress",
+      progress: { phase: "connecting" }
+    });
+    
+    // Fetch events for a 2-month window (1 month back, 1 month forward)
+    const now = DateTime.now();
+    const timeMin = now.minus({ months: 1 }).startOf("day").toISO();
+    const timeMax = now.plus({ months: 1 }).endOf("day").toISO();
+    
+    if (!timeMin || !timeMax) {
+      throw new Error("Failed to calculate date range");
+    }
+    
+    set(updateMessageAtom, { 
+      text: "Fetching events...", 
+      progress: { phase: "fetching" }
+    });
+    
+    const fetchedEvents = await fetchAllEvents({
+      timeMin,
+      timeMax,
+    });
+    
+    set(updateMessageAtom, { 
+      text: "Saving events...", 
+      progress: { current: 0, total: fetchedEvents.length }
+    });
+    
+    // Clear existing events and replace with fetched ones
+    await eventsRepo.clear();
+    
+    // Deduplicate events by ID before saving
+    // (same event can appear in multiple calendars)
+    const eventById = new Map<string, GCalEvent>();
+    for (const event of fetchedEvents) {
+      // If we already have this event, keep the one from the primary calendar
+      // or just keep the first one we saw
+      if (!eventById.has(event.id)) {
+        eventById.set(event.id, event);
+      }
+    }
+    
+    const uniqueEvents = Array.from(eventById.values());
+    let saved = 0;
+    
+    for (const event of uniqueEvents) {
+      // Add missing required fields
+      const eventWithMeta: GCalEvent = {
+        ...event,
+        createdAt: event.created || new Date().toISOString(),
+        updatedAt: event.updated || new Date().toISOString(),
+      };
+      await eventsRepo.create(eventWithMeta);
+      saved++;
+      
+      // Update progress every 10 events
+      if (saved % 10 === 0) {
+        set(updateMessageAtom, { 
+          progress: { current: saved, total: uniqueEvents.length }
+        });
+      }
+    }
+    
+    // Log dedup stats
+    const { dbLogger } = await import("../lib/logger.ts");
+    if (fetchedEvents.length !== uniqueEvents.length) {
+      dbLogger.info(`Deduplicated events: ${fetchedEvents.length} -> ${uniqueEvents.length}`);
+    }
+    
+    // Update the events atom
+    const eventsMap: Record<string, GCalEvent> = {};
+    for (const event of uniqueEvents) {
+      eventsMap[event.id] = {
+        ...event,
+        createdAt: event.created || new Date().toISOString(),
+        updatedAt: event.updated || new Date().toISOString(),
+      };
+    }
+    set(eventsAtom, eventsMap);
+    
+    // Reset selection to closest event to now
+    const selectedDay = get(selectedDayAtom);
+    set(selectedDayAtom, selectedDay); // Trigger re-render
+    
+    set(showMessageAtom, { 
+      text: `Synced ${uniqueEvents.length} events`, 
+      type: "success" 
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    set(showMessageAtom, { text: `Sync failed: ${message}`, type: "error" });
+  }
+  
+  set(isAuthLoadingAtom, false);
+});
+
+// Check auth status on startup and load accounts
+export const checkAuthStatusAtom = atom(null, async (get, set) => {
+  const { isLoggedIn, getAccounts } = await import("../auth/index.ts");
+  const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
+  
+  const loggedIn = await isLoggedIn();
+  set(isLoggedInAtom, loggedIn);
+  
+  if (loggedIn) {
+    const accounts = await getAccounts();
+    set(accountsAtom, accounts.map((a) => ({
+      email: a.account.email,
+      name: a.account.name,
+      picture: a.account.picture,
+    })));
+  }
+});
+
+// Show connected accounts in status
+export const showAccountsAtom = atom(null, async (get, set) => {
+  const { getAccounts, getDefaultAccount } = await import("../auth/index.ts");
+  
+  const accounts = await getAccounts();
+  const defaultAccount = await getDefaultAccount();
+  
+  if (accounts.length === 0) {
+    set(showMessageAtom, { text: "No accounts. Run 'login' to add one.", type: "info" });
+    return;
+  }
+  
+  // Show account emails inline
+  const accountList = accounts.map((a) => {
+    const isDefault = a.account.email === defaultAccount?.account.email;
+    return isDefault ? `●${a.account.email}` : a.account.email;
+  }).join(" ");
+  
+  set(showMessageAtom, { text: `Accounts: ${accountList}`, type: "info" });
 });

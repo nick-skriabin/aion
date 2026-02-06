@@ -20,6 +20,11 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },
     { key: "ctrl+c", display: "Ctrl+c", description: "Quit application", action: "quit" },
+    // Auth commands (no keybindings, command-only)
+    { key: "", display: "", description: "Login / Add Google account", action: "login", command: "login" },
+    { key: "", display: "", description: "Logout from Google Calendar", action: "logout", command: "logout" },
+    { key: "", display: "", description: "Sync events with Google Calendar", action: "sync", command: "sync" },
+    { key: "", display: "", description: "List connected accounts", action: "accounts", command: "accounts" },
   ],
 
   days: [
@@ -60,6 +65,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "e", display: "e", description: "Edit event", action: "editEvent" },
     { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent" },
     { key: "o", display: "o", description: "Open meeting link", action: "openMeetingLink" },
+    { key: "t", display: "t", description: "Toggle timezone (local/original)", action: "toggleTimezone" },
   ],
 
   dialog: [

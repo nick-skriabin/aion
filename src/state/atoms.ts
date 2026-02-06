@@ -77,6 +77,64 @@ export const pendingActionAtom = atom<EventAction | null>(null);
 // Timezone
 export const timezoneAtom = atom<string>(getLocalTimezone());
 
+// ===== Auth State =====
+
+// Whether the user is logged in (has any account)
+export const isLoggedInAtom = atom<boolean>(false);
+
+// Auth status message (for displaying login progress) - DEPRECATED, use messageAtom
+export const authStatusAtom = atom<string | null>(null);
+
+// Whether auth operation is in progress
+export const isAuthLoadingAtom = atom<boolean>(false);
+
+// ===== Message System (Vim-style) =====
+
+export type MessageType = "info" | "success" | "warning" | "error" | "progress";
+
+export interface Message {
+  id: string;
+  text: string;
+  type: MessageType;
+  // For progress messages - optional progress indicator
+  progress?: {
+    current?: number;
+    total?: number;
+    phase?: string;
+  };
+}
+
+// Current message to display in the command bar area
+export const messageAtom = atom<Message | null>(null);
+
+// Message visibility (hidden when command bar opens)
+export const messageVisibleAtom = atom<boolean>(true);
+
+// ===== Multi-Account State =====
+
+export interface AccountState {
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+// List of all logged-in accounts
+export const accountsAtom = atom<AccountState[]>([]);
+
+// Number of logged-in accounts
+export const accountsCountAtom = atom((get) => get(accountsAtom).length);
+
+// Map account email to color index (1-based to match calendarColors config)
+export const accountColorMapAtom = atom((get) => {
+  const accounts = get(accountsAtom);
+  const colorMap: Record<string, number> = {};
+  accounts.forEach((account, index) => {
+    // Color indices are 1-based in the config (1-6)
+    colorMap[account.email] = (index % 6) + 1;
+  });
+  return colorMap;
+});
+
 // ===== Derived Atoms =====
 
 // Get selected event
