@@ -395,6 +395,67 @@ function AllDayBar({
   );
 }
 
+// Sticky header for events that started above visible area
+function StickyEventHeaders({
+  timedEvents,
+  scrollOffset,
+  selectedEventId,
+  isFocused,
+}: {
+  timedEvents: TimedEventLayout[];
+  scrollOffset: number;
+  selectedEventId: string | null;
+  isFocused: boolean;
+}) {
+  const visibleStartMinutes = scrollOffset * MINUTES_PER_SLOT;
+  
+  // Find events that started before visible area but are still ongoing
+  const stickyEvents = timedEvents.filter((layout) => {
+    const startSlot = minutesToSlot(layout.startMinutes);
+    return startSlot < scrollOffset && layout.endMinutes > visibleStartMinutes;
+  });
+  
+  if (stickyEvents.length === 0) return null;
+  
+  return (
+    <Box style={{ flexDirection: "column" }}>
+      {stickyEvents.map((layout) => {
+        const event = layout.event;
+        const isSelected = selectedEventId === event.id;
+        const isHighlighted = isSelected && isFocused;
+        const eventColor = getEventTypeColor(event);
+        const responseStatus = getSelfResponseStatus(event);
+        const hasAttendees = (event.attendees?.length ?? 0) > 0;
+        const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
+        const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
+        const isDeclined = responseStatus === "declined";
+        
+        const bgColor = isHighlighted ? theme.selection.background : undefined;
+        const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
+        
+        return (
+          <Box key={event.id} style={{ flexDirection: "row" }}>
+            <Box style={{ width: HOUR_LABEL_WIDTH }}>
+              <Text style={{ color: theme.text.dim, dim: true }}>{"↑".padStart(HOUR_LABEL_WIDTH - 1)}</Text>
+            </Box>
+            <Text style={{ color: textColor }}>┬</Text>
+            <Box style={{ paddingLeft: 1 + layout.column * COLUMN_WIDTH, flexDirection: "row", bg: bgColor }}>
+              {attendanceIndicator && (
+                <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
+                  {attendanceIndicator}
+                </Text>
+              )}
+              <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
+                {getDisplayTitle(event)}
+              </Text>
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 export function Timeline() {
   const layout = useAtomValue(dayLayoutAtom);
   const selectedDay = useAtomValue(selectedDayAtom);
@@ -479,6 +540,14 @@ export function Timeline() {
         </FocusScope>
       )}
       
+      {/* Sticky headers for events scrolled out of view */}
+      <StickyEventHeaders
+        timedEvents={layout.timedEvents}
+        scrollOffset={scrollOffset}
+        selectedEventId={selectedEventId}
+        isFocused={isFocused}
+      />
+      
       {/* Timeline grid */}
       <ScrollView style={{ flexGrow: 1 }} scrollOffset={scrollOffset}>
         {Array.from({ length: totalSlots }, (_, i) => i).map((slotIndex) => (
@@ -492,13 +561,6 @@ export function Timeline() {
           />
         ))}
       </ScrollView>
-      
-      {/* Footer */}
-      <Box>
-        <Text style={{ color: theme.text.dim, dim: true }}>
-          j/k:nav  enter:details  e:edit  D:del  n:now
-        </Text>
-      </Box>
     </Box>
   );
 }

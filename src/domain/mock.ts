@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import type { GCalEvent, EventType } from "./gcalEvent.ts";
+import type { GCalEvent, EventType, Visibility, Reminders } from "./gcalEvent.ts";
 import { getLocalTimezone } from "./time.ts";
 
 // Generate a random ID
@@ -18,10 +18,12 @@ function createEvent(
     eventType?: EventType;
     description?: string;
     location?: string;
-    attendees?: Array<{ email: string; displayName?: string; responseStatus?: "needsAction" | "declined" | "tentative" | "accepted" }>;
+    attendees?: Array<{ email: string; displayName?: string; responseStatus?: "needsAction" | "declined" | "tentative" | "accepted"; self?: boolean }>;
     recurrence?: string[];
     htmlLink?: string;
     hangoutLink?: string;
+    visibility?: Visibility;
+    reminders?: Reminders;
   } = {}
 ): GCalEvent {
   const tz = getLocalTimezone();
@@ -33,6 +35,7 @@ function createEvent(
       summary,
       status: "confirmed",
       eventType: options.eventType || "default",
+      visibility: options.visibility,
       start: { date: start.toFormat("yyyy-MM-dd") },
       end: { date: end.toFormat("yyyy-MM-dd") },
       description: options.description,
@@ -41,6 +44,7 @@ function createEvent(
       recurrence: options.recurrence,
       htmlLink: options.htmlLink || `https://calendar.google.com/event?eid=${generateId()}`,
       hangoutLink: options.hangoutLink,
+      reminders: options.reminders,
       createdAt: now,
       updatedAt: now,
     };
@@ -51,6 +55,7 @@ function createEvent(
     summary,
     status: "confirmed",
     eventType: options.eventType || "default",
+    visibility: options.visibility,
     start: { dateTime: start.toISO() ?? undefined, timeZone: tz },
     end: { dateTime: end.toISO() ?? undefined, timeZone: tz },
     description: options.description,
@@ -59,6 +64,7 @@ function createEvent(
     recurrence: options.recurrence,
     htmlLink: options.htmlLink || `https://calendar.google.com/event?eid=${generateId()}`,
     hangoutLink: options.hangoutLink,
+    reminders: options.reminders,
     createdAt: now,
     updatedAt: now,
   };
@@ -80,6 +86,12 @@ export function generateSeedData(): GCalEvent[] {
       {
         eventType: "focusTime",
         description: "Deep work block - no interruptions",
+        visibility: "private",
+        reminders: {
+          overrides: [
+            { method: "popup", minutes: 10 },
+          ],
+        },
       }
     )
   );
@@ -119,9 +131,17 @@ export function generateSeedData(): GCalEvent[] {
       {
         description: "Weekly front-end engineering sync",
         attendees: [
+          { email: "me@example.com", displayName: "Me", responseStatus: "accepted", self: true },
           { email: "frontend@example.com", displayName: "FE Team", responseStatus: "accepted" },
         ],
         hangoutLink: "https://meet.google.com/fe-guild",
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"],
+        reminders: {
+          overrides: [
+            { method: "popup", minutes: 10 },
+            { method: "email", minutes: 1440 }, // 1 day before
+          ],
+        },
       }
     )
   );
@@ -147,11 +167,17 @@ export function generateSeedData(): GCalEvent[] {
       {
         description: "Quick sync with the team",
         attendees: [
+          { email: "me@example.com", displayName: "Me", responseStatus: "accepted", self: true },
           { email: "alice@example.com", displayName: "Alice Chen", responseStatus: "accepted" },
           { email: "bob@example.com", displayName: "Bob Smith", responseStatus: "accepted" },
         ],
         recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"],
         hangoutLink: "https://meet.google.com/abc-defg-hij",
+        reminders: {
+          overrides: [
+            { method: "popup", minutes: 5 },
+          ],
+        },
       }
     )
   );

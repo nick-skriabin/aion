@@ -7,6 +7,7 @@ import {
 import {
   popOverlayAtom,
   continueDeleteWithNotifyAtom,
+  openHelpAtom,
 } from "../state/actions.ts";
 
 /**
@@ -24,11 +25,18 @@ export function KeyboardHandler() {
   
   const popOverlay = useSetAtom(popOverlayAtom);
   const continueDeleteWithNotify = useSetAtom(continueDeleteWithNotifyAtom);
+  const openHelp = useSetAtom(openHelpAtom);
   
   const isNotifyModal = topOverlay?.payload?.type === "notifyAttendees";
+  const isHelpOpen = topOverlay?.kind === "help";
   
   return (
     <>
+      {/* Help dialog - ? key (not when help is already open) */}
+      {!isHelpOpen && (
+        <Keybind keypress="?" onPress={() => openHelp()} />
+      )}
+      
       {/* Escape closes overlays */}
       {hasOverlay && (
         <Keybind keypress="escape" onPress={() => popOverlay()} />

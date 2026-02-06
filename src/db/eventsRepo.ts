@@ -14,6 +14,7 @@ function toRow(event: GCalEvent): InsertEventRow {
     htmlLink: event.htmlLink ?? null,
     status: event.status,
     eventType: event.eventType ?? null,
+    visibility: event.visibility ?? null,
     startDate: event.start.date ?? null,
     startDateTime: event.start.dateTime ?? null,
     startTimeZone: event.start.timeZone ?? null,
@@ -28,6 +29,7 @@ function toRow(event: GCalEvent): InsertEventRow {
     attendeesJson: event.attendees ? JSON.stringify(event.attendees) : null,
     organizerJson: event.organizer ? JSON.stringify(event.organizer) : null,
     hangoutLink: event.hangoutLink ?? null,
+    remindersJson: event.reminders ? JSON.stringify(event.reminders) : null,
     createdAt: event.createdAt ?? now,
     updatedAt: event.updatedAt ?? now,
   };
@@ -43,6 +45,7 @@ function fromRow(row: EventRow): GCalEvent {
     htmlLink: row.htmlLink ?? undefined,
     status: row.status as GCalEvent["status"],
     eventType: (row.eventType as GCalEvent["eventType"]) ?? "default",
+    visibility: (row.visibility as GCalEvent["visibility"]) ?? undefined,
     start: {
       date: row.startDate ?? undefined,
       dateTime: row.startDateTime ?? undefined,
@@ -63,6 +66,7 @@ function fromRow(row: EventRow): GCalEvent {
     attendees: row.attendeesJson ? JSON.parse(row.attendeesJson) : undefined,
     organizer: row.organizerJson ? JSON.parse(row.organizerJson) : undefined,
     hangoutLink: row.hangoutLink ?? undefined,
+    reminders: row.remindersJson ? JSON.parse(row.remindersJson) : undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

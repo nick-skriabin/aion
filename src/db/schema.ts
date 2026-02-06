@@ -8,6 +8,7 @@ export const events = sqliteTable("events", {
   htmlLink: text("html_link"),
   status: text("status").notNull(), // confirmed | tentative | cancelled
   eventType: text("event_type"), // default | outOfOffice | focusTime | birthday
+  visibility: text("visibility"), // default | public | private | confidential
   
   // Start time fields
   startDate: text("start_date"), // YYYY-MM-DD for all-day events
@@ -30,6 +31,9 @@ export const events = sqliteTable("events", {
   
   // Links
   hangoutLink: text("hangout_link"),
+  
+  // Reminders
+  remindersJson: text("reminders_json"), // JSON reminders object
   
   // Timestamps
   createdAt: text("created_at").notNull(),

@@ -39,6 +39,7 @@ export async function initDb(): Promise<ReturnType<typeof drizzle<typeof schema>
       html_link TEXT,
       status TEXT NOT NULL,
       event_type TEXT,
+      visibility TEXT,
       start_date TEXT,
       start_date_time TEXT,
       start_time_zone TEXT,
@@ -51,10 +52,19 @@ export async function initDb(): Promise<ReturnType<typeof drizzle<typeof schema>
       attendees_json TEXT,
       organizer_json TEXT,
       hangout_link TEXT,
+      reminders_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
   `);
+  
+  // Add new columns if they don't exist (migration for existing DBs)
+  try {
+    sqlite.exec(`ALTER TABLE events ADD COLUMN visibility TEXT;`);
+  } catch { /* column already exists */ }
+  try {
+    sqlite.exec(`ALTER TABLE events ADD COLUMN reminders_json TEXT;`);
+  } catch { /* column already exists */ }
   
   db = drizzle(sqlite, { schema });
   return db;

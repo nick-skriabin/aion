@@ -14,7 +14,7 @@ export type FocusContext =
   | "confirm";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help";
 
 export interface Overlay {
   kind: OverlayKind;

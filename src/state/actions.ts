@@ -39,8 +39,10 @@ export const pushOverlayAtom = atom(
       ...stack,
       { ...overlay, prevFocus: currentFocus },
     ]);
-    // Set focus based on overlay kind
-    set(focusAtom, overlay.kind as FocusContext);
+    // Set focus based on overlay kind (help doesn't change focus)
+    if (overlay.kind !== "help") {
+      set(focusAtom, overlay.kind as FocusContext);
+    }
   }
 );
 
@@ -469,6 +471,11 @@ export const executeCommandAtom = atom(null, (get, set) => {
     // Unknown command - just close
     set(popOverlayAtom);
   }
+});
+
+// Open help dialog
+export const openHelpAtom = atom(null, (get, set) => {
+  set(pushOverlayAtom, { kind: "help" });
 });
 
 // ===== Data Loading =====

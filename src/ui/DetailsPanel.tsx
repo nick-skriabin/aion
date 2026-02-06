@@ -9,6 +9,9 @@ import {
   isAllDay,
   isRecurring,
   getResponseStatusIcon,
+  getVisibilityLabel,
+  parseRecurrenceRule,
+  formatReminder,
   type ResponseStatus,
 } from "../domain/gcalEvent.ts";
 import { getEventStart, getEventEnd, formatTimeRange, formatDayHeader } from "../domain/time.ts";
@@ -91,6 +94,18 @@ export function DetailsPanel() {
   const timeStr = allDay ? "All day" : formatTimeRange(start, end);
   const dateStr = formatDayHeader(start);
   
+  // Get timezone from event or use default
+  const eventTimezone = event.start.timeZone || tz;
+  
+  // Parse recurrence rule
+  const recurrenceStr = parseRecurrenceRule(event.recurrence);
+  
+  // Get visibility label
+  const visibilityStr = getVisibilityLabel(event.visibility);
+  
+  // Format reminders
+  const reminders = event.reminders?.overrides || [];
+  
   // Find self attendee to get current response status
   const selfAttendee = event.attendees?.find((a) => a.self);
   const currentStatus = selfAttendee?.responseStatus;
@@ -164,6 +179,25 @@ export function DetailsPanel() {
               <Text style={{ color: theme.text.secondary }}>{timeStr}</Text>
             </Row>
             
+            {/* Timezone */}
+            {eventTimezone && (
+              <Row label="tz">
+                <Text style={{ color: theme.text.dim }}>{eventTimezone}</Text>
+              </Row>
+            )}
+            
+            {/* Recurrence */}
+            {recurrenceStr && (
+              <Row label="repeats">
+                <Text style={{ color: theme.text.secondary }}>{recurrenceStr}</Text>
+              </Row>
+            )}
+            
+            {/* Visibility */}
+            <Row label="show as">
+              <Text style={{ color: theme.text.secondary }}>{visibilityStr}</Text>
+            </Row>
+            
             {/* Attendance */}
             <Row label="going?">
               <AttendanceButtons currentStatus={currentStatus} />
@@ -216,6 +250,24 @@ export function DetailsPanel() {
                         {attendee.displayName || attendee.email}
                       </Text>
                     </Box>
+                  </Row>
+                ))}
+              </>
+            )}
+            
+            {/* Reminders */}
+            {reminders.length > 0 && (
+              <>
+                <Row label="remind">
+                  <Text style={{ color: theme.text.secondary }}>
+                    {formatReminder(reminders[0].minutes, reminders[0].method)}
+                  </Text>
+                </Row>
+                {reminders.slice(1).map((r, i) => (
+                  <Row key={i} label="">
+                    <Text style={{ color: theme.text.secondary }}>
+                      {formatReminder(r.minutes, r.method)}
+                    </Text>
                   </Row>
                 ))}
               </>

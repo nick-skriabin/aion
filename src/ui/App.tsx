@@ -7,7 +7,8 @@ import { EventDialog } from "./EventDialog.tsx";
 import { ConfirmModal } from "./ConfirmModal.tsx";
 import { CommandBar } from "./CommandBar.tsx";
 import { KeyboardHandler } from "./KeyboardHandler.tsx";
-import { topOverlayAtom, focusAtom } from "../state/atoms.ts";
+import { HelpDialog } from "./HelpDialog.tsx";
+import { overlayStackAtom } from "../state/atoms.ts";
 import { loadEventsAtom } from "../state/actions.ts";
 import { initDb } from "../db/db.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
@@ -15,12 +16,36 @@ import { generateSeedData } from "../domain/mock.ts";
 import { loadConfig } from "../config/config.ts";
 import { theme } from "./theme.ts";
 
+// Render overlays from stack - allows multiple overlays to be visible
+function OverlayRenderer() {
+  const overlayStack = useAtomValue(overlayStackAtom);
+  
+  return (
+    <>
+      {overlayStack.map((overlay, index) => {
+        switch (overlay.kind) {
+          case "details":
+            return <DetailsPanel key={`details-${index}`} />;
+          case "dialog":
+            return <EventDialog key={`dialog-${index}`} />;
+          case "confirm":
+            return <ConfirmModal key={`confirm-${index}`} />;
+          case "command":
+            return <CommandBar key={`command-${index}`} />;
+          case "help":
+            return <HelpDialog key={`help-${index}`} />;
+          default:
+            return null;
+        }
+      })}
+    </>
+  );
+}
+
 function AppContent() {
   const { exit } = useApp();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const topOverlay = useAtomValue(topOverlayAtom);
-  const focus = useAtomValue(focusAtom);
   const loadEvents = useSetAtom(loadEventsAtom);
   
   // Initialize database and load events
@@ -93,7 +118,7 @@ function AppContent() {
           Aion
         </Text>
         <Text style={{ color: theme.text.dim }}>
-          h/l:pane  j/k:nav  q:quit
+          ?:help  q:quit
         </Text>
       </Box>
       
@@ -107,11 +132,8 @@ function AppContent() {
       <Keybind keypress="q" onPress={() => exit()} />
       <Keybind keypress="ctrl+c" onPress={() => exit()} />
       
-      {/* Overlays */}
-      {topOverlay?.kind === "details" && <DetailsPanel />}
-      {topOverlay?.kind === "dialog" && <EventDialog />}
-      {topOverlay?.kind === "confirm" && <ConfirmModal />}
-      {topOverlay?.kind === "command" && <CommandBar />}
+      {/* Overlays - render based on stack, not just top */}
+      <OverlayRenderer />
     </Box>
   );
 }
