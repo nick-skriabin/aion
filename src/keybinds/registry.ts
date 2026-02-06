@@ -5,6 +5,7 @@ export interface KeybindDef {
   display: string;       // Human-readable display (e.g., "D", "Ctrl+u")
   description: string;   // What it does
   action: string;        // Action identifier for lookup
+  command?: string;      // Optional command name for command bar (e.g., "new", "edit")
 }
 
 export type KeybindScope = FocusContext | "global";
@@ -12,11 +13,12 @@ export type KeybindScope = FocusContext | "global";
 // Central registry of all keybinds
 export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
   global: [
-    { key: "?", display: "?", description: "Show keyboard shortcuts", action: "openHelp" },
-    { key: "shift+n", display: "N", description: "Open notifications", action: "openNotifications" },
+    { key: "?", display: "?", description: "Show keyboard shortcuts", action: "openHelp", command: "help" },
+    { key: "N", display: "N", description: "Open notifications", action: "openNotifications", command: "notifications" },
+    { key: "ctrl+n", display: "Ctrl+n", description: "Create new event", action: "newEvent", command: "new" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
-    { key: "q", display: "q", description: "Quit application", action: "quit" },
+    { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },
     { key: "ctrl+c", display: "Ctrl+c", description: "Quit application", action: "quit" },
   ],
 
@@ -40,11 +42,11 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "up", display: "k / ↑", description: "Previous event", action: "prevEvent" },
     { key: "g", display: "gg", description: "First event", action: "firstEvent" },
     { key: "shift+g", display: "G", description: "Last event", action: "lastEvent" },
-    { key: "n", display: "n", description: "Jump to now", action: "jumpToNow" },
+    { key: "n", display: "n", description: "Jump to now", action: "jumpToNow", command: "now" },
     { key: "return", display: "Enter", description: "Open event details", action: "openDetails" },
     { key: "space", display: "Space", description: "Open event details", action: "openDetails" },
-    { key: "e", display: "e", description: "Edit event", action: "editEvent" },
-    { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent" },
+    { key: "e", display: "e", description: "Edit event", action: "editEvent", command: "edit" },
+    { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent", command: "delete" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "h", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
     { key: "l", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
@@ -132,8 +134,51 @@ export function getKeybindsForHelp(context: FocusContext): { title: string; keyb
   return sections;
 }
 
-// Commands for command bar
-export const COMMANDS = [
-  { name: "new", description: "Create new event" },
-  { name: "new <title>", description: "Create event with title" },
-];
+// Get all commands from registry (keybinds with command field)
+export function getAllCommands(): { name: string; description: string; action: string }[] {
+  const commands: { name: string; description: string; action: string }[] = [];
+  const seen = new Set<string>();
+  
+  for (const scope of Object.keys(KEYBIND_REGISTRY) as KeybindScope[]) {
+    for (const kb of KEYBIND_REGISTRY[scope]) {
+      if (kb.command && !seen.has(kb.command)) {
+        seen.add(kb.command);
+        commands.push({
+          name: kb.command,
+          description: kb.description,
+          action: kb.action,
+        });
+      }
+    }
+  }
+  
+  // Add commands with arguments (special cases)
+  commands.push({ name: "new <title>", description: "Create event with title", action: "newEvent" });
+  
+  return commands.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Find command by name (exact match or prefix for parameterized commands)
+export function findCommand(input: string): { name: string; action: string; args?: string } | null {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return null;
+  
+  // Check for exact match first
+  const commands = getAllCommands();
+  const exact = commands.find((c) => c.name === trimmed);
+  if (exact) {
+    return { name: exact.name, action: exact.action };
+  }
+  
+  // Check for parameterized commands (e.g., "new my event")
+  const parts = trimmed.split(/\s+/);
+  const cmdName = parts[0];
+  const args = parts.slice(1).join(" ");
+  
+  const parameterized = commands.find((c) => c.name.startsWith(cmdName + " <") || c.name === cmdName);
+  if (parameterized) {
+    return { name: parameterized.name, action: parameterized.action, args: args || undefined };
+  }
+  
+  return null;
+}

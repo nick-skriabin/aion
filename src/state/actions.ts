@@ -459,17 +459,45 @@ export const openCommandAtom = atom(null, (get, set) => {
   set(pushOverlayAtom, { kind: "command" });
 });
 
-// Execute command
+// Execute command from registry
 export const executeCommandAtom = atom(null, (get, set) => {
   const input = get(commandInputAtom).trim();
+  set(popOverlayAtom); // Close command bar first
   
-  if (input === "new" || input.startsWith("new ")) {
-    const title = input.slice(3).trim();
-    set(popOverlayAtom); // Close command bar first
-    set(openNewDialogAtom, title || undefined);
-  } else {
-    // Unknown command - just close
-    set(popOverlayAtom);
+  if (!input) return;
+  
+  // Import findCommand dynamically to avoid circular deps
+  const { findCommand } = require("../keybinds/registry.ts");
+  const cmd = findCommand(input);
+  
+  if (!cmd) return;
+  
+  // Execute action based on command
+  switch (cmd.action) {
+    case "newEvent":
+      set(openNewDialogAtom, cmd.args || undefined);
+      break;
+    case "openHelp":
+      set(pushOverlayAtom, { kind: "help" });
+      break;
+    case "openNotifications":
+      set(pushOverlayAtom, { kind: "notifications" });
+      break;
+    case "editEvent":
+      set(openEditDialogAtom);
+      break;
+    case "deleteEvent":
+      set(initiateDeleteAtom);
+      break;
+    case "jumpToNow":
+      set(jumpToNowAtom);
+      break;
+    case "quit":
+      process.exit(0);
+      break;
+    default:
+      // Unknown action
+      break;
   }
 });
 
@@ -481,6 +509,11 @@ export const openHelpAtom = atom(null, (get, set) => {
 // Open notifications panel
 export const openNotificationsAtom = atom(null, (get, set) => {
   set(pushOverlayAtom, { kind: "notifications" });
+});
+
+// Create new event (for Ctrl+N global keybind)
+export const newEventAtom = atom(null, (get, set) => {
+  set(openNewDialogAtom);
 });
 
 // ===== Data Loading =====

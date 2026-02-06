@@ -6,7 +6,7 @@ import {
   selectedDayIndexAtom,
   focusAtom,
 } from "../state/atoms.ts";
-import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom } from "../state/actions.ts";
+import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom, newEventAtom } from "../state/actions.ts";
 import { formatDayShort, isToday } from "../domain/time.ts";
 import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
 import { theme } from "./theme.ts";
@@ -16,6 +16,7 @@ function DaysKeybinds() {
   const toggleFocus = useSetAtom(toggleFocusAtom);
   const confirmDaySelection = useSetAtom(confirmDaySelectionAtom);
   const openNotifications = useSetAtom(openNotificationsAtom);
+  const newEvent = useSetAtom(newEventAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -32,7 +33,8 @@ function DaysKeybinds() {
   // Global keybind handlers (need to be handled here due to FocusScope trap)
   const globalHandlers = useMemo(() => ({
     openNotifications: () => openNotifications(),
-  }), [openNotifications]);
+    newEvent: () => newEvent(),
+  }), [openNotifications, newEvent]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)

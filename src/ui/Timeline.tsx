@@ -17,6 +17,7 @@ import {
   jumpToNowAtom,
   moveEventSelectionAtom,
   openNotificationsAtom,
+  newEventAtom,
 } from "../state/actions.ts";
 import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart } from "../domain/time.ts";
 import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
@@ -101,6 +102,7 @@ function TimelineKeybinds() {
   const jumpToNow = useSetAtom(jumpToNowAtom);
   const moveEventSelection = useSetAtom(moveEventSelectionAtom);
   const openNotifications = useSetAtom(openNotificationsAtom);
+  const newEvent = useSetAtom(newEventAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -121,7 +123,8 @@ function TimelineKeybinds() {
   // Global keybind handlers (need to be handled here due to FocusScope trap)
   const globalHandlers = useMemo(() => ({
     openNotifications: () => openNotifications(),
-  }), [openNotifications]);
+    newEvent: () => newEvent(),
+  }), [openNotifications, newEvent]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)
