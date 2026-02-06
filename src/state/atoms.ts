@@ -59,6 +59,9 @@ export const overlayStackAtom = atom<Overlay[]>([]);
 // Command input
 export const commandInputAtom = atom<string>("");
 
+// Command palette selection index
+export const commandSelectedIndexAtom = atom<number>(0);
+
 // Command history
 export const commandHistoryAtom = atom<string[]>([]);
 

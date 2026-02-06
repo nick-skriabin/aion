@@ -3,7 +3,7 @@ import { Box, Text, Portal, ScrollView, Keybind, Input } from "@nick-skriabin/gl
 import { useAtomValue, useSetAtom } from "jotai";
 import { focusAtom, overlayStackAtom } from "../state/atoms.ts";
 import { popOverlayAtom } from "../state/actions.ts";
-import { getKeybindsForHelp, COMMANDS, type KeybindDef } from "../keybinds/registry.ts";
+import { getKeybindsForHelp, getAllCommands, type KeybindDef } from "../keybinds/registry.ts";
 import { theme } from "./theme.ts";
 import type { FocusContext } from "../state/atoms.ts";
 
@@ -60,16 +60,17 @@ export function HelpDialog() {
   // Add commands section if in command context
   const showCommands = contextFocus === "command" && !filter.trim();
   
-  // Filter commands too
+  // Get all commands and filter
+  const allCommands = useMemo(() => getAllCommands(), []);
   const filteredCommands = useMemo(() => {
-    if (!filter.trim()) return COMMANDS;
+    if (!filter.trim()) return allCommands;
     const lowerQuery = filter.toLowerCase();
-    return COMMANDS.filter(
+    return allCommands.filter(
       (cmd) =>
         cmd.name.toLowerCase().includes(lowerQuery) ||
         cmd.description.toLowerCase().includes(lowerQuery)
     );
-  }, [filter]);
+  }, [allCommands, filter]);
 
   return (
     <Portal zIndex={100}>

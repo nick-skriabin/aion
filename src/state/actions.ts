@@ -13,6 +13,7 @@ import {
   timelineScrollAtom,
   overlayStackAtom,
   commandInputAtom,
+  commandSelectedIndexAtom,
   dialogEventAtom,
   isEditModeAtom,
   pendingActionAtom,
@@ -456,6 +457,8 @@ export const updateAttendanceAtom = atom(
 
 // Open command bar
 export const openCommandAtom = atom(null, (get, set) => {
+  set(commandInputAtom, ""); // Reset input
+  set(commandSelectedIndexAtom, 0); // Reset selection
   set(pushOverlayAtom, { kind: "command" });
 });
 
