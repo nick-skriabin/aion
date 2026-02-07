@@ -4,6 +4,7 @@ import { Provider, useAtomValue, useSetAtom } from "jotai";
 import { DayView } from "./DayView.tsx";
 import { DetailsPanel } from "./DetailsPanel.tsx";
 import { EventDialog } from "./EventDialog.tsx";
+import { ProposeTimeDialog } from "./ProposeTimeDialog.tsx";
 import { ConfirmModal } from "./ConfirmModal.tsx";
 import { KeyboardHandler } from "./KeyboardHandler.tsx";
 import { HelpDialog } from "./HelpDialog.tsx";
@@ -12,8 +13,6 @@ import { NotificationsPanel } from "./NotificationsPanel.tsx";
 import { overlayStackAtom, isLoggedInAtom } from "../state/atoms.ts";
 import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
 import { initDb } from "../db/db.ts";
-import { eventsRepo } from "../db/eventsRepo.ts";
-import { generateSeedData } from "../domain/mock.ts";
 import { loadConfig } from "../config/config.ts";
 import { theme } from "./theme.ts";
 
@@ -29,6 +28,8 @@ function OverlayRenderer() {
             return <DetailsPanel key={`details-${index}`} />;
           case "dialog":
             return <EventDialog key={`dialog-${index}`} />;
+          case "proposeTime":
+            return <ProposeTimeDialog key={`proposeTime-${index}`} />;
           case "confirm":
             return <ConfirmModal key={`confirm-${index}`} />;
           case "help":
@@ -59,14 +60,8 @@ function AppContent() {
         await loadConfig();
         await initDb();
         
-        // Check auth status
+        // Check auth status and start background sync if logged in
         await checkAuthStatus();
-        
-        const isEmpty = await eventsRepo.isEmpty();
-        if (isEmpty) {
-          const seedData = generateSeedData();
-          await eventsRepo.seed(seedData);
-        }
         
         await loadEvents();
         setLoading(false);

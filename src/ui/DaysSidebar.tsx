@@ -7,7 +7,7 @@ import {
   focusAtom,
   sidebarHeightAtom,
 } from "../state/atoms.ts";
-import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom, newEventAtom } from "../state/actions.ts";
+import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom, newEventAtom, toggleAllDayExpandedAtom } from "../state/actions.ts";
 import { formatDayShort, isToday } from "../domain/time.ts";
 import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
 import { theme } from "./theme.ts";
@@ -18,6 +18,7 @@ function DaysKeybinds() {
   const confirmDaySelection = useSetAtom(confirmDaySelectionAtom);
   const openNotifications = useSetAtom(openNotificationsAtom);
   const newEvent = useSetAtom(newEventAtom);
+  const toggleAllDayExpanded = useSetAtom(toggleAllDayExpandedAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -35,7 +36,8 @@ function DaysKeybinds() {
   const globalHandlers = useMemo(() => ({
     openNotifications: () => openNotifications(),
     newEvent: () => newEvent(),
-  }), [openNotifications, newEvent]);
+    toggleAllDay: () => toggleAllDayExpanded(),
+  }), [openNotifications, newEvent, toggleAllDayExpanded]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)
@@ -79,18 +81,22 @@ function DaysList() {
       {days.map((day, index) => {
         const isCurrentDay = isToday(day);
         const isSelected = index === selectedIndex;
+        const isWeekend = day.weekday === 6 || day.weekday === 7; // Saturday or Sunday
+
+        // Determine text color based on state
+        const getTextColor = () => {
+          if (isSelected && isFocused) return theme.selection.indicator;
+          if (isCurrentDay) return theme.accent.success;
+          if (isSelected) return theme.text.primary;
+          if (isWeekend) return theme.text.weekend;
+          return theme.text.dim;
+        };
         
         return (
           <Box key={day.toISO()}>
             <Text
               style={{
-                color: isSelected && isFocused
-                  ? theme.selection.indicator
-                  : isCurrentDay
-                  ? theme.accent.success
-                  : isSelected
-                  ? theme.text.primary
-                  : theme.text.dim,
+                color: getTextColor(),
                 bold: isSelected && isFocused,
               }}
             >

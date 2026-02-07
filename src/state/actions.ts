@@ -4,6 +4,7 @@ import type { GCalEvent, ResponseStatus } from "../domain/gcalEvent.ts";
 import { findNearestEvent } from "../domain/layout.ts";
 import { getNowMinutes, getLocalTimezone } from "../domain/time.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
+import { appLogger } from "../lib/logger.ts";
 import {
   eventsAtom,
   selectedDayAtom,
@@ -22,6 +23,9 @@ import {
   messageAtom,
   messageVisibleAtom,
   sidebarHeightAtom,
+  allDayExpandedAtom,
+  timezoneAtom,
+  calendarsAtom,
   type FocusContext,
   type Overlay,
   type OverlayKind,
@@ -234,6 +238,12 @@ export const scrollTimelineAtom = atom(
   }
 );
 
+// Toggle all-day events section expanded/collapsed
+export const toggleAllDayExpandedAtom = atom(null, (get, set) => {
+  const current = get(allDayExpandedAtom);
+  set(allDayExpandedAtom, !current);
+});
+
 // ===== Event Actions =====
 
 // Open details panel for selected event
@@ -269,38 +279,59 @@ export const openNewDialogAtom = atom(null, (get, set, prefillTitle?: string) =>
 });
 
 // Open event dialog for editing
-export const openEditDialogAtom = atom(null, (get, set) => {
+export const openEditDialogAtom = atom(null, async (get, set) => {
   const event = get(eventsAtom)[get(selectedEventIdAtom) || ""];
   if (!event) return;
   
-  // Check if recurring - if so, show scope selector first
-  const isRecurring = (event.recurrence && event.recurrence.length > 0) || !!event.recurringEventId;
+  const { canEdit } = await import("../domain/gcalEvent.ts");
   
-  if (isRecurring) {
-    set(pendingActionAtom, { eventId: event.id });
-    set(pushOverlayAtom, { kind: "confirm", payload: { type: "editScope" } });
-  } else {
-    set(dialogEventAtom, { ...event });
-    set(isEditModeAtom, true);
-    set(pushOverlayAtom, { kind: "dialog" });
+  // Check if user can edit this event
+  if (!canEdit(event)) {
+    set(showMessageAtom, { 
+      text: "Can't edit - you're not the organizer. Press 'p' to propose new time.", 
+      type: "warning" 
+    });
+    return;
   }
+  
+  // Open edit dialog directly - scope selection happens on save for recurring events
+  set(dialogEventAtom, { ...event });
+  set(isEditModeAtom, true);
+  set(pendingActionAtom, null); // Clear any pending action
+  set(pushOverlayAtom, { kind: "dialog" });
 });
 
-// Continue edit after scope selection
+// Propose new time for an event (for non-organizers)
+export const proposeNewTimeAtom = atom(null, async (get, set) => {
+  const event = get(eventsAtom)[get(selectedEventIdAtom) || ""];
+  if (!event) return;
+  
+  const { isOrganizer } = await import("../domain/gcalEvent.ts");
+  
+  // If user is the organizer, just open full edit
+  if (isOrganizer(event)) {
+    set(openEditDialogAtom);
+    return;
+  }
+  
+  // Open propose time dialog
+  set(dialogEventAtom, { ...event });
+  set(isEditModeAtom, true);
+  set(pendingActionAtom, { eventId: event.id, type: "proposeTime" });
+  set(pushOverlayAtom, { kind: "proposeTime" });
+});
+
+// Continue edit after scope selection (for recurring events)
 export const continueEditWithScopeAtom = atom(
   null,
   (get, set, scope: RecurrenceScope) => {
     const pending = get(pendingActionAtom);
     if (!pending) return;
     
-    const event = get(eventsAtom)[pending.eventId];
-    if (!event) return;
-    
+    // Set the scope and perform the save
     set(pendingActionAtom, { ...pending, scope });
     set(popOverlayAtom); // Close scope selector
-    set(dialogEventAtom, { ...event });
-    set(isEditModeAtom, true);
-    set(pushOverlayAtom, { kind: "dialog" });
+    set(performSaveAtom); // Now actually save with the scope
   }
 );
 
@@ -308,6 +339,32 @@ export const continueEditWithScopeAtom = atom(
 export const saveEventAtom = atom(null, async (get, set) => {
   const dialogEvent = get(dialogEventAtom);
   const isEditMode = get(isEditModeAtom);
+  const pendingAction = get(pendingActionAtom);
+  
+  if (!dialogEvent) return;
+  
+  // Check if editing a recurring event without scope selected yet
+  if (isEditMode && dialogEvent.id) {
+    const { isRecurring } = await import("../domain/gcalEvent.ts");
+    const eventIsRecurring = isRecurring(dialogEvent as GCalEvent);
+    
+    // If recurring and no scope set, show scope selection dialog
+    if (eventIsRecurring && !pendingAction?.scope) {
+      set(pendingActionAtom, { eventId: dialogEvent.id });
+      set(pushOverlayAtom, { kind: "confirm", payload: { type: "editScope" } });
+      return; // Wait for scope selection
+    }
+  }
+  
+  // Proceed with actual save
+  set(performSaveAtom);
+});
+
+// Perform the actual save (called after scope selection for recurring events)
+export const performSaveAtom = atom(null, async (get, set) => {
+  const dialogEvent = get(dialogEventAtom);
+  const isEditMode = get(isEditModeAtom);
+  const pendingAction = get(pendingActionAtom);
   
   if (!dialogEvent) return;
   
@@ -317,6 +374,7 @@ export const saveEventAtom = atom(null, async (get, set) => {
   
   if (isEditMode && dialogEvent.id) {
     // Update existing event
+    const originalEvent = get(eventsAtom)[dialogEvent.id];
     let event: GCalEvent = {
       ...dialogEvent,
       updatedAt: now,
@@ -325,6 +383,8 @@ export const saveEventAtom = atom(null, async (get, set) => {
     // Try to update on Google Calendar first if logged in
     if (isLoggedIn && dialogEvent.accountEmail) {
       try {
+        set(showMessageAtom, { text: "Updating event...", type: "progress" });
+        
         const { updateEvent } = await import("../api/calendar.ts");
         const updatedEvent = await updateEvent(
           dialogEvent.id,
@@ -335,16 +395,19 @@ export const saveEventAtom = atom(null, async (get, set) => {
             start: dialogEvent.start,
             end: dialogEvent.end,
             attendees: dialogEvent.attendees,
+            eventType: dialogEvent.eventType,
           },
           dialogEvent.calendarId || "primary",
-          dialogEvent.accountEmail
+          dialogEvent.accountEmail,
+          pendingAction?.scope, // Pass the recurrence scope
+          originalEvent // Pass original event for recurring event handling
         );
         event = { ...event, ...updatedEvent, updatedAt: now };
         set(showMessageAtom, { text: "Event updated", type: "success" });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         set(showMessageAtom, { text: `Update failed: ${message}`, type: "error" });
-        // Continue with local update anyway
+        return; // Don't save locally if API failed
       }
     }
     
@@ -362,39 +425,56 @@ export const saveEventAtom = atom(null, async (get, set) => {
     // Try to create on Google Calendar first if logged in
     if (isLoggedIn) {
       try {
+        set(showMessageAtom, { text: "Creating event...", type: "progress" });
+        
         const { createEvent } = await import("../api/calendar.ts");
         const { getDefaultAccount } = await import("../auth/index.ts");
         
-        // Use default account for new events
-        const defaultAccount = await getDefaultAccount();
-        const accountEmail = defaultAccount?.account.email;
+        // Use selected account from dialog, or fall back to default account
+        let accountEmail = dialogEvent.accountEmail;
+        if (!accountEmail) {
+          const defaultAccount = await getDefaultAccount();
+          accountEmail = defaultAccount?.account.email;
+        }
         
         if (accountEmail) {
           const createdEvent = await createEvent(
             {
-              summary: dialogEvent.summary,
+              summary: dialogEvent.summary || "New Event",
               description: dialogEvent.description,
               location: dialogEvent.location,
               start: dialogEvent.start,
               end: dialogEvent.end,
               attendees: dialogEvent.attendees,
+              eventType: dialogEvent.eventType,
             },
-            "primary",
+            dialogEvent.calendarId || "primary",
             accountEmail
           );
           event = { ...event, ...createdEvent, createdAt: now, updatedAt: now };
           set(showMessageAtom, { text: "Event created", type: "success" });
+        } else {
+          set(showMessageAtom, { text: "No account selected", type: "error" });
+          return;
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         set(showMessageAtom, { text: `Create failed: ${message}`, type: "error" });
-        // Continue with local create anyway
+        return; // Don't save locally if API failed
       }
     }
     
     await eventsRepo.create(event);
     set(eventsAtom, (prev) => ({ ...prev, [event.id]: event }));
     set(selectedEventIdAtom, event.id);
+    
+    // Navigate to the day of the new event
+    const { parseTimeObject, getLocalTimezone } = await import("../domain/time.ts");
+    const tz = get(timezoneAtom) || getLocalTimezone();
+    if (event.start) {
+      const eventDay = parseTimeObject(event.start, tz).startOf("day");
+      set(selectedDayAtom, eventDay);
+    }
   }
   
   // Close dialog
@@ -403,17 +483,25 @@ export const saveEventAtom = atom(null, async (get, set) => {
 });
 
 // Initiate delete
-export const initiateDeleteAtom = atom(null, (get, set) => {
+export const initiateDeleteAtom = atom(null, async (get, set) => {
   const selectedId = get(selectedEventIdAtom);
   if (!selectedId) return;
   
   const event = get(eventsAtom)[selectedId];
   if (!event) return;
   
+  const { isOrganizer } = await import("../domain/gcalEvent.ts");
+  
+  // Check if user is the organizer - non-organizers can only leave (decline)
+  if (!isOrganizer(event)) {
+    set(pushOverlayAtom, { kind: "confirm", payload: { type: "leaveEvent", eventId: selectedId } });
+    return;
+  }
+  
   const isRecurring = (event.recurrence && event.recurrence.length > 0) || !!event.recurringEventId;
   const hasOtherAttendees = event.attendees?.some(a => !a.self && !a.organizer) ?? false;
   
-  set(pendingActionAtom, { eventId: selectedId });
+  set(pendingActionAtom, { eventId: selectedId, type: "delete" });
   
   if (isRecurring) {
     // Show scope selector first
@@ -477,6 +565,8 @@ export const confirmDeleteAtom = atom(null, async (get, set) => {
   // Try to delete on Google Calendar first if logged in
   if (isLoggedIn && event.accountEmail) {
     try {
+      set(showMessageAtom, { text: "Deleting event...", type: "progress" });
+      
       const { deleteEvent } = await import("../api/calendar.ts");
       await deleteEvent(
         pending.eventId,
@@ -488,12 +578,13 @@ export const confirmDeleteAtom = atom(null, async (get, set) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       set(showMessageAtom, { text: `Delete failed: ${message}`, type: "error" });
-      // Continue with local delete anyway
+      set(pendingActionAtom, null);
+      set(popOverlayAtom);
+      return; // Don't delete locally if API failed
     }
   }
   
-  // For v0, we just delete the event regardless of scope
-  // In real implementation, scope would affect which instances to delete
+  // Delete locally
   await eventsRepo.delete(pending.eventId);
   
   set(eventsAtom, (prev) => {
@@ -681,6 +772,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
     case "editEvent":
       set(openEditDialogAtom);
       break;
+    case "proposeNewTime":
+      set(proposeNewTimeAtom);
+      break;
     case "deleteEvent":
       set(initiateDeleteAtom);
       break;
@@ -701,6 +795,12 @@ export const executeCommandAtom = atom(null, (get, set) => {
       break;
     case "accounts":
       set(showAccountsAtom);
+      break;
+    case "toggleAllDay":
+      set(toggleAllDayExpandedAtom);
+      break;
+    case "upgrade":
+      set(upgradePermissionsAtom);
       break;
     default:
       // Unknown action
@@ -770,6 +870,24 @@ export const loginAtom = atom(null, async (get, set) => {
     })));
     set(isLoggedInAtom, accounts.length > 0);
     
+    // Fetch calendars for all accounts
+    try {
+      const { getAllCalendars } = await import("../api/calendar.ts");
+      appLogger.debug("loginAtom: Fetching calendars...");
+      const calendars = await getAllCalendars();
+      appLogger.info(`loginAtom: Fetched ${calendars.length} calendars`);
+      set(calendarsAtom, calendars.map((cal) => ({
+        id: cal.id,
+        summary: cal.summary,
+        primary: cal.primary,
+        accountEmail: cal.accountEmail || "",
+        backgroundColor: cal.backgroundColor,
+        foregroundColor: cal.foregroundColor,
+      })));
+    } catch (error) {
+      appLogger.error("loginAtom: Failed to fetch calendars", { error });
+    }
+    
     // Auto-sync after login (full sync)
     await set(syncAtom, { force: true });
     
@@ -779,6 +897,49 @@ export const loginAtom = atom(null, async (get, set) => {
         await set(backgroundSyncAtom);
       });
     }
+  }
+});
+
+// Upgrade permissions (grant new OAuth scopes without re-login)
+export const upgradePermissionsAtom = atom(null, async (get, set) => {
+  const { upgradePermissions, getAccounts, getDefaultAccount } = await import("../auth/index.ts");
+  const { accountsAtom } = await import("./atoms.ts");
+  
+  const accounts = await getAccounts();
+  if (accounts.length === 0) {
+    set(showMessageAtom, { text: "No accounts. Run 'login' first.", type: "warning" });
+    return;
+  }
+  
+  // Get default account or first account
+  const defaultAccount = await getDefaultAccount();
+  const accountToUpgrade = defaultAccount?.account.email || accounts[0].account.email;
+  
+  set(showMessageAtom, { text: "Opening browser to upgrade permissions...", type: "progress" });
+  
+  const result = await upgradePermissions(accountToUpgrade, {
+    onAuthUrl: () => {
+      set(updateMessageAtom, { text: "Waiting for permission grant...", type: "progress" });
+    },
+    onSuccess: (account) => {
+      set(showMessageAtom, { text: `Permissions upgraded for ${account.email}`, type: "success" });
+    },
+    onError: (error) => {
+      set(showMessageAtom, { text: `Upgrade failed: ${error}`, type: "error" });
+    },
+  });
+  
+  if (result.success) {
+    // Refresh accounts list
+    const updatedAccounts = await getAccounts();
+    set(accountsAtom, updatedAccounts.map((a) => ({
+      email: a.account.email,
+      name: a.account.name,
+      picture: a.account.picture,
+    })));
+    
+    // Do a fresh sync to take advantage of new permissions
+    await set(syncAtom, { force: true });
   }
 });
 
@@ -882,6 +1043,23 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
       picture: a.account.picture,
     })));
     
+    // Fetch and store calendars for all accounts
+    try {
+      const { getAllCalendars } = await import("../api/calendar.ts");
+      const calendars = await getAllCalendars();
+      appLogger.debug(`syncAtom: Fetched ${calendars.length} calendars`);
+      set(calendarsAtom, calendars.map((cal) => ({
+        id: cal.id,
+        summary: cal.summary,
+        primary: cal.primary,
+        accountEmail: cal.accountEmail || "",
+        backgroundColor: cal.backgroundColor,
+        foregroundColor: cal.foregroundColor,
+      })));
+    } catch (error) {
+      appLogger.error("syncAtom: Failed to fetch calendars", { error });
+    }
+    
     // Force full sync if requested
     if (options?.force) {
       await clearAllSyncTokens();
@@ -889,7 +1067,13 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     
     // Try incremental sync first
     if (!options?.force) {
+      appLogger.debug("Attempting incremental sync...");
       const incrementalResult = await incrementalSyncAll(getSyncToken);
+      appLogger.debug("Incremental sync result", {
+        changed: incrementalResult.changed.length,
+        deleted: incrementalResult.deleted.length,
+        calendarsRequiringFullSync: incrementalResult.calendarsRequiringFullSync.length,
+      });
       
       // Check if any calendar needs full sync
       if (incrementalResult.calendarsRequiringFullSync.length === 0) {
@@ -963,6 +1147,7 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     }
     
     // Full sync
+    appLogger.info("Starting full sync...");
     if (!isBackgroundSync) {
       set(showMessageAtom, { 
         text: "Full sync...", 
@@ -1074,13 +1259,38 @@ export const backgroundSyncAtom = atom(null, async (get, set) => {
   await set(syncAtom, { silent: true });
 });
 
+// Fetch calendars for all accounts
+export const fetchCalendarsAtom = atom(null, async (get, set) => {
+  const { getAllCalendars } = await import("../api/calendar.ts");
+  
+  try {
+    appLogger.debug("fetchCalendarsAtom: Fetching calendars...");
+    const calendars = await getAllCalendars();
+    appLogger.info(`fetchCalendarsAtom: Fetched ${calendars.length} calendars`, { 
+      calendars: calendars.map(c => ({ id: c.id, summary: c.summary, account: c.accountEmail }))
+    });
+    set(calendarsAtom, calendars.map((cal) => ({
+      id: cal.id,
+      summary: cal.summary,
+      primary: cal.primary,
+      accountEmail: cal.accountEmail || "",
+      backgroundColor: cal.backgroundColor,
+      foregroundColor: cal.foregroundColor,
+    })));
+  } catch (error) {
+    appLogger.error("fetchCalendarsAtom: Failed to fetch calendars", { error });
+  }
+});
+
 // Check auth status on startup and load accounts
 export const checkAuthStatusAtom = atom(null, async (get, set) => {
+  appLogger.info("checkAuthStatusAtom: Starting...");
   const { isLoggedIn, getAccounts } = await import("../auth/index.ts");
   const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
   const { startBackgroundSync, isBackgroundSyncRunning } = await import("../sync/backgroundSync.ts");
   
   const loggedIn = await isLoggedIn();
+  appLogger.debug(`checkAuthStatusAtom: loggedIn=${loggedIn}`);
   set(isLoggedInAtom, loggedIn);
   
   if (loggedIn) {
@@ -1090,6 +1300,24 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
       name: a.account.name,
       picture: a.account.picture,
     })));
+    
+    // Fetch calendars for all accounts
+    try {
+      const { getAllCalendars } = await import("../api/calendar.ts");
+      appLogger.debug("checkAuthStatusAtom: Fetching calendars...");
+      const calendars = await getAllCalendars();
+      appLogger.info(`checkAuthStatusAtom: Fetched ${calendars.length} calendars`);
+      set(calendarsAtom, calendars.map((cal) => ({
+        id: cal.id,
+        summary: cal.summary,
+        primary: cal.primary,
+        accountEmail: cal.accountEmail || "",
+        backgroundColor: cal.backgroundColor,
+        foregroundColor: cal.foregroundColor,
+      })));
+    } catch (error) {
+      appLogger.error("checkAuthStatusAtom: Failed to fetch calendars", { error });
+    }
     
     // Start background sync if logged in
     if (!isBackgroundSyncRunning()) {

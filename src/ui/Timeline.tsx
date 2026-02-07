@@ -7,18 +7,22 @@ import {
   focusAtom,
   selectedEventIdAtom,
   dayEventsAtom,
-  accountColorMapAtom,
+  calendarColorMapAtom,
+  getCalendarColor,
+  allDayExpandedAtom,
 } from "../state/atoms.ts";
 import {
   toggleFocusAtom,
   openDetailsAtom,
   openEditDialogAtom,
+  proposeNewTimeAtom,
   initiateDeleteAtom,
   openCommandAtom,
   jumpToNowAtom,
   moveEventSelectionAtom,
   openNotificationsAtom,
   newEventAtom,
+  toggleAllDayExpandedAtom,
 } from "../state/actions.ts";
 import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart } from "../domain/time.ts";
 import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
@@ -74,19 +78,17 @@ const MINUTES_PER_SLOT = 15;
 const COLUMN_WIDTH = 28;
 
 /**
- * Get color for an event based on its account
- * Falls back to event type color if no account
+ * Get color for an event based on its calendar
+ * Falls back to event type color if no calendar color
  */
-function getEventColor(event: GCalEvent, accountColorMap: Record<string, number>): string {
-  // If event has an account, use the account color
-  if (event.accountEmail && accountColorMap[event.accountEmail]) {
-    const colorIndex = accountColorMap[event.accountEmail];
-    const colorKey = String(colorIndex) as keyof typeof theme.calendarColors;
-    const color = theme.calendarColors?.[colorKey];
-    if (color) return color;
+function getEventColor(event: GCalEvent, calendarColorMap: Record<string, string>): string {
+  // Use calendar color from Google
+  const calendarColor = getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap);
+  if (calendarColor && calendarColor !== "#4285f4") {
+    return calendarColor;
   }
 
-// Fallback to event type color
+  // Fallback to event type color
   switch (event.eventType) {
     case "outOfOffice":
       return theme.eventType.outOfOffice;
@@ -95,7 +97,7 @@ function getEventColor(event: GCalEvent, accountColorMap: Record<string, number>
     case "birthday":
       return theme.eventType.birthday;
     default:
-      return theme.eventType.default;
+      return calendarColor; // Use default Google blue
   }
 }
 
@@ -111,12 +113,14 @@ function TimelineKeybinds() {
   const toggleFocus = useSetAtom(toggleFocusAtom);
   const openDetails = useSetAtom(openDetailsAtom);
   const openEditDialog = useSetAtom(openEditDialogAtom);
+  const proposeNewTime = useSetAtom(proposeNewTimeAtom);
   const initiateDelete = useSetAtom(initiateDeleteAtom);
   const openCommand = useSetAtom(openCommandAtom);
   const jumpToNow = useSetAtom(jumpToNowAtom);
   const moveEventSelection = useSetAtom(moveEventSelectionAtom);
   const openNotifications = useSetAtom(openNotificationsAtom);
   const newEvent = useSetAtom(newEventAtom);
+  const toggleAllDayExpanded = useSetAtom(toggleAllDayExpandedAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -129,16 +133,18 @@ function TimelineKeybinds() {
     jumpToNow: () => jumpToNow(),
     openDetails: () => openDetails(),
     editEvent: () => openEditDialog(),
+    proposeNewTime: () => proposeNewTime(),
     deleteEvent: () => initiateDelete(),
     openCommand: () => openCommand(),
     toggleFocus: () => toggleFocus(),
-  }), [moveEventSelection, jumpToNow, openDetails, openEditDialog, initiateDelete, openCommand, toggleFocus]);
+  }), [moveEventSelection, jumpToNow, openDetails, openEditDialog, proposeNewTime, initiateDelete, openCommand, toggleFocus]);
   
   // Global keybind handlers (need to be handled here due to FocusScope trap)
   const globalHandlers = useMemo(() => ({
     openNotifications: () => openNotifications(),
     newEvent: () => newEvent(),
-  }), [openNotifications, newEvent]);
+    toggleAllDay: () => toggleAllDayExpanded(),
+  }), [openNotifications, newEvent, toggleAllDayExpanded]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)
@@ -205,13 +211,13 @@ function EventColumn({
   isSelected,
   isFocused,
   width,
-  accountColorMap,
+  calendarColorMap,
 }: {
   slotEvent: SlotEvent | null;
   isSelected: boolean;
   isFocused: boolean;
   width: number;
-    accountColorMap: Record<string, number>;
+    calendarColorMap: Record<string, string>;
 }) {
   if (!slotEvent) {
     return <Box style={{ width }} />;
@@ -219,7 +225,7 @@ function EventColumn({
   
   const { layout, isStart } = slotEvent;
   const event = layout.event;
-  const eventColor = getEventColor(event, accountColorMap);
+  const eventColor = getEventColor(event, calendarColorMap);
   const isHighlighted = isSelected && isFocused;
   const responseStatus = getSelfResponseStatus(event);
   const hasAttendees = (event.attendees?.length ?? 0) > 0;
@@ -273,14 +279,14 @@ function SlotRow({
   selectedEventId,
   isFocused,
   isNowSlot,
-  accountColorMap,
+  calendarColorMap,
 }: {
   slotIndex: number;
   allEvents: TimedEventLayout[];
   selectedEventId: string | null;
   isFocused: boolean;
   isNowSlot: boolean;
-    accountColorMap: Record<string, number>;
+    calendarColorMap: Record<string, string>;
 }) {
   const { byColumn, maxColumns } = getEventsForSlot(slotIndex, allEvents);
   const hour = Math.floor(slotIndex / SLOTS_PER_HOUR);
@@ -300,7 +306,7 @@ function SlotRow({
         isSelected={isSelected}
         isFocused={isFocused}
         width={COLUMN_WIDTH}
-        accountColorMap={accountColorMap}
+        calendarColorMap={calendarColorMap}
       />
     );
   }
@@ -347,58 +353,117 @@ function SlotRow({
   );
 }
 
-// All-day events bar
+// Single all-day event row
+function AllDayEventRow({
+  event,
+  isFirst,
+  isSelected,
+  isFocused,
+  calendarColorMap,
+}: {
+    event: GCalEvent;
+    isFirst: boolean;
+    isSelected: boolean;
+  isFocused: boolean;
+    calendarColorMap: Record<string, string>;
+  }) {
+  const eventColor = getEventColor(event, calendarColorMap);
+  const isHighlighted = isSelected && isFocused;
+  const responseStatus = getSelfResponseStatus(event);
+  const hasAttendees = (event.attendees?.length ?? 0) > 0;
+  const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
+  const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
+  const isDeclined = responseStatus === "declined";
+
+  const bgColor = isHighlighted ? theme.selection.background : undefined;
+  const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
+
+  return (
+    <Box style={{ flexDirection: "row" }}>
+      <Box style={{ width: HOUR_LABEL_WIDTH }}>
+        {isFirst && <Text style={{ color: theme.text.dim }}>all-day</Text>}
+      </Box>
+      <Text style={{ color: theme.text.dim }}>│</Text>
+      <Box style={{ paddingLeft: 1, flexDirection: "row", bg: bgColor }}>
+        <Text style={{ color: textColor, bold: isHighlighted }}>
+          {isHighlighted ? "▸" : "○"}
+        </Text>
+        <Text> </Text>
+        {attendanceIndicator && (
+          <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
+            {attendanceIndicator}
+          </Text>
+        )}
+        <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
+          {getDisplayTitle(event)}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+// All-day events bar with collapse support
 function AllDayBar({
   events,
   selectedEventId,
   isFocused,
-  accountColorMap,
+  calendarColorMap,
+  isExpanded,
 }: {
   events: GCalEvent[];
   selectedEventId: string | null;
   isFocused: boolean;
-    accountColorMap: Record<string, number>;
+  calendarColorMap: Record<string, string>;
+  isExpanded: boolean;
 }) {
   if (events.length === 0) return null;
-  
+
+  const COLLAPSE_THRESHOLD = 2;
+  const shouldCollapse = events.length > COLLAPSE_THRESHOLD && !isExpanded;
+
+  // When collapsed, show first 2 events + summary row
+  const visibleEvents = shouldCollapse ? events.slice(0, COLLAPSE_THRESHOLD) : events;
+  const hiddenCount = events.length - COLLAPSE_THRESHOLD;
+
+  // Check if any hidden event is selected (need to show it)
+  const selectedInHidden = shouldCollapse && events.slice(COLLAPSE_THRESHOLD).some(e => e.id === selectedEventId);
+
   return (
     <Box style={{ paddingBottom: 1 }}>
-      {events.map((event) => {
-        const isSelected = selectedEventId === event.id;
-        const eventColor = getEventColor(event, accountColorMap);
-        const isHighlighted = isSelected && isFocused;
-        const responseStatus = getSelfResponseStatus(event);
-        const hasAttendees = (event.attendees?.length ?? 0) > 0;
-        const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
-        const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
-        const isDeclined = responseStatus === "declined";
-        
-        const bgColor = isHighlighted ? theme.selection.background : undefined;
-        const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
-        
-        return (
-          <Box key={event.id} style={{ flexDirection: "row" }}>
-            <Box style={{ width: HOUR_LABEL_WIDTH }}>
-              <Text style={{ color: theme.text.dim }}>all-day</Text>
-            </Box>
-            <Text style={{ color: theme.text.dim }}>│</Text>
-            <Box style={{ paddingLeft: 1, flexDirection: "row", bg: bgColor }}>
-              <Text style={{ color: textColor, bold: isHighlighted }}>
-                {isHighlighted ? "▸" : "○"}
-              </Text>
-              <Text> </Text>
-              {attendanceIndicator && (
-                <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
-                  {attendanceIndicator}
-                </Text>
-              )}
-              <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
-                {getDisplayTitle(event)}
-              </Text>
-            </Box>
+      {visibleEvents.map((event, index) => (
+        <AllDayEventRow
+          key={event.id}
+          event={event}
+          isFirst={index === 0}
+          isSelected={selectedEventId === event.id}
+          isFocused={isFocused}
+          calendarColorMap={calendarColorMap}
+        />
+      ))}
+
+      {/* Show summary row when collapsed */}
+      {shouldCollapse && (
+        <Box style={{ flexDirection: "row" }}>
+          <Box style={{ width: HOUR_LABEL_WIDTH }} />
+          <Text style={{ color: theme.text.dim }}>│</Text>
+          <Box style={{ paddingLeft: 1, flexDirection: "row" }}>
+            <Text style={{ color: selectedInHidden ? theme.accent.warning : theme.text.dim }}>
+              {selectedInHidden ? "▸ " : "  "}+{hiddenCount} more {hiddenCount === 1 ? "event" : "events"} (a to expand)
+            </Text>
           </Box>
-        );
-      })}
+        </Box>
+      )}
+
+      {/* Show collapse hint when expanded and there are many events */}
+      {isExpanded && events.length > COLLAPSE_THRESHOLD && (
+        <Box style={{ flexDirection: "row" }}>
+          <Box style={{ width: HOUR_LABEL_WIDTH }} />
+          <Text style={{ color: theme.text.dim }}>│</Text>
+          <Box style={{ paddingLeft: 1 }}>
+            <Text style={{ color: theme.text.dim }}>  (a to collapse)</Text>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -409,13 +474,13 @@ function StickyEventHeaders({
   scrollOffset,
   selectedEventId,
   isFocused,
-  accountColorMap,
+  calendarColorMap,
 }: {
   timedEvents: TimedEventLayout[];
   scrollOffset: number;
   selectedEventId: string | null;
   isFocused: boolean;
-    accountColorMap: Record<string, number>;
+    calendarColorMap: Record<string, string>;
 }) {
   const visibleStartMinutes = scrollOffset * MINUTES_PER_SLOT;
   
@@ -433,7 +498,7 @@ function StickyEventHeaders({
         const event = layout.event;
         const isSelected = selectedEventId === event.id;
         const isHighlighted = isSelected && isFocused;
-        const eventColor = getEventColor(event, accountColorMap);
+        const eventColor = getEventColor(event, calendarColorMap);
         const responseStatus = getSelfResponseStatus(event);
         const hasAttendees = (event.attendees?.length ?? 0) > 0;
         const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
@@ -473,15 +538,23 @@ export function Timeline() {
   const focus = useAtomValue(focusAtom);
   const [selectedEventId, setSelectedEventId] = useAtom(selectedEventIdAtom);
   const events = useAtomValue(dayEventsAtom);
-  const accountColorMap = useAtomValue(accountColorMapAtom);
+  const calendarColorMap = useAtomValue(calendarColorMapAtom);
+  const allDayExpanded = useAtomValue(allDayExpandedAtom);
   
   const isFocused = focus === "timeline";
   const isTodayView = isToday(selectedDay);
   const nowMinutes = isTodayView ? getNowMinutes() : -1;
   const nowSlot = nowMinutes >= 0 ? minutesToSlot(nowMinutes) : -1;
   
-  // Count lines used by headers
-  const allDayLines = layout.allDayEvents.length > 0 ? layout.allDayEvents.length + 1 : 0; // +1 for padding
+  // Count lines used by all-day events section
+  const COLLAPSE_THRESHOLD = 2;
+  const allDayCount = layout.allDayEvents.length;
+  const shouldCollapseAllDay = allDayCount > COLLAPSE_THRESHOLD && !allDayExpanded;
+  // When collapsed: 2 events + 1 summary row + 1 padding
+  // When expanded: all events + 1 collapse hint (if >2) + 1 padding
+  const allDayLines = allDayCount === 0 ? 0
+    : shouldCollapseAllDay ? COLLAPSE_THRESHOLD + 2
+      : allDayCount + (allDayCount > COLLAPSE_THRESHOLD ? 2 : 1);
   const stickyEvents = layout.timedEvents.filter((l) => {
     const startSlot = minutesToSlot(l.startMinutes);
     return startSlot < 0; // Will be recalculated with actual scrollOffset
@@ -585,7 +658,8 @@ export function Timeline() {
         events={layout.allDayEvents}
         selectedEventId={selectedEventId}
         isFocused={isFocused}
-        accountColorMap={accountColorMap}
+        calendarColorMap={calendarColorMap}
+        isExpanded={allDayExpanded}
       />
       
       {/* Keybinds when focused */}
@@ -601,7 +675,7 @@ export function Timeline() {
         scrollOffset={scrollOffset}
         selectedEventId={selectedEventId}
         isFocused={isFocused}
-        accountColorMap={accountColorMap}
+        calendarColorMap={calendarColorMap}
       />
       
       {/* Timeline grid - manually sliced for visible range */}
@@ -614,7 +688,7 @@ export function Timeline() {
             selectedEventId={selectedEventId}
             isFocused={isFocused}
             isNowSlot={nowSlot === slotIndex}
-            accountColorMap={accountColorMap}
+            calendarColorMap={calendarColorMap}
           />
         ))}
       </Box>

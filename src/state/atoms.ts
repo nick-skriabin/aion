@@ -15,7 +15,7 @@ export type FocusContext =
   | "notifications";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -29,6 +29,7 @@ export type RecurrenceScope = "this" | "following" | "all";
 // Delete/Edit action state
 export interface EventAction {
   eventId: string;
+  type?: "edit" | "delete" | "proposeTime";
   scope?: RecurrenceScope;
   notifyAttendees?: boolean;
 }
@@ -52,6 +53,9 @@ export const selectedEventIdAtom = atom<string | null>(null);
 
 // Timeline scroll position (hour index 0-23)
 export const timelineScrollAtom = atom<number>(8); // Default to 8 AM
+
+// Whether all-day events section is expanded (shows all events vs collapsed summary)
+export const allDayExpandedAtom = atom<boolean>(false);
 
 // Overlay stack
 export const overlayStackAtom = atom<Overlay[]>([]);
@@ -137,6 +141,59 @@ export const accountColorMapAtom = atom((get) => {
   });
   return colorMap;
 });
+
+// ===== Calendars State =====
+
+export interface CalendarInfo {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  accountEmail: string;
+  backgroundColor?: string;
+  foregroundColor?: string;
+}
+
+// List of all calendars across all accounts
+export const calendarsAtom = atom<CalendarInfo[]>([]);
+
+// Calendars grouped by account email
+export const calendarsByAccountAtom = atom((get) => {
+  const calendars = get(calendarsAtom);
+  const byAccount: Record<string, CalendarInfo[]> = {};
+  
+  for (const cal of calendars) {
+    if (!byAccount[cal.accountEmail]) {
+      byAccount[cal.accountEmail] = [];
+    }
+    byAccount[cal.accountEmail].push(cal);
+  }
+  
+  return byAccount;
+});
+
+// Calendar color map: key is "accountEmail:calendarId", value is the background color
+export const calendarColorMapAtom = atom((get) => {
+  const calendars = get(calendarsAtom);
+  const colorMap: Record<string, string> = {};
+  
+  for (const cal of calendars) {
+    const key = `${cal.accountEmail}:${cal.id}`;
+    colorMap[key] = cal.backgroundColor || "#4285f4"; // Default to Google blue
+  }
+  
+  return colorMap;
+});
+
+// Helper to get calendar color for an event
+export function getCalendarColor(
+  accountEmail: string | undefined,
+  calendarId: string | undefined,
+  colorMap: Record<string, string>
+): string {
+  if (!accountEmail || !calendarId) return "#4285f4";
+  const key = `${accountEmail}:${calendarId}`;
+  return colorMap[key] || "#4285f4";
+}
 
 // ===== Derived Atoms =====
 

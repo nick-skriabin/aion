@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Box,
   Text,
@@ -8,7 +8,10 @@ import {
   Select,
   Portal,
   FocusScope,
+  ScrollView,
   useInput,
+  useApp,
+  createMask,
 } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
@@ -16,12 +19,22 @@ import {
   dialogEventAtom,
   isEditModeAtom,
   timezoneAtom,
+  accountsAtom,
+  calendarColorMapAtom,
+  getCalendarColor,
+  calendarsByAccountAtom,
+  type CalendarInfo,
 } from "../state/atoms.ts";
 import { popOverlayAtom, saveEventAtom } from "../state/actions.ts";
 import type { GCalEvent, EventType } from "../domain/gcalEvent.ts";
 import { isAllDay as checkIsAllDay } from "../domain/gcalEvent.ts";
 import { parseTimeObject, toTimeObject, getLocalTimezone } from "../domain/time.ts";
+import { parseNaturalDate, formatParsedPreview, type ParsedDateTime } from "../domain/naturalDate.ts";
 import { theme } from "./theme.ts";
+
+// Input masks for date and time fields
+const dateMask = createMask("9999-99-99");
+const timeMask = createMask("99:99");
 
 const EVENT_TYPES: Array<{ label: string; value: EventType }> = [
   { label: "Event", value: "default" },
@@ -30,29 +43,55 @@ const EVENT_TYPES: Array<{ label: string; value: EventType }> = [
 ];
 
 const DIALOG_WIDTH = 50;
+const LABEL_WIDTH = 8;
+const INPUT_WIDTH = 37; // DIALOG_WIDTH - padding(2) - border(2) - LABEL_WIDTH - gap(1)
 
-function DialogKeybinds({ onSave }: { onSave: () => void }) {
-  const pop = useSetAtom(popOverlayAtom);
-  
+interface OriginalValues {
+  summary: string;
+  description: string;
+  location: string;
+  eventType: EventType;
+  isAllDay: boolean;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  attendees: string[];
+  accountEmail: string;
+}
+
+function DialogKeybinds({
+  onSave,
+  onCancel
+}: {
+  onSave: () => void;
+  onCancel: () => void;
+}) {
   useInput((key) => {
     if (key.name === "escape") {
-      pop();
+      onCancel();
     }
     if (key.name === "s" && key.ctrl) {
       onSave();
     }
   });
-  
+
   return null;
 }
 
 export function EventDialog() {
+  const { rows: terminalHeight } = useApp();
   const [dialogEvent, setDialogEvent] = useAtom(dialogEventAtom);
   const isEditMode = useAtomValue(isEditModeAtom);
   const tz = useAtomValue(timezoneAtom);
+  const accounts = useAtomValue(accountsAtom);
+  const calendarColorMap = useAtomValue(calendarColorMapAtom);
   const pop = useSetAtom(popOverlayAtom);
   const save = useSetAtom(saveEventAtom);
-  
+
+  // Calculate max dialog height (80% of screen)
+  const maxDialogHeight = Math.floor(terminalHeight * 0.8);
+
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
@@ -64,56 +103,168 @@ export function EventDialog() {
   const [endTime, setEndTime] = useState("");
   const [attendeesInput, setAttendeesInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
-  
+  const [accountEmail, setAccountEmail] = useState("");
+
+  // Calendars for selected account
+  const calendarsByAccount = useAtomValue(calendarsByAccountAtom);
+  const calendarsForAccount = useMemo(() => calendarsByAccount[accountEmail] ?? [], [calendarsByAccount, accountEmail]);
+  const [calendarId, setCalendarId] = useState<string | null>(null);
+
+  // Natural language date input
+  const [whenInput, setWhenInput] = useState("");
+  const [whenPreview, setWhenPreview] = useState<ParsedDateTime | null>(null);
+
+  // Track original values for change detection
+  const originalValuesRef = useRef<OriginalValues | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  // Track if we've initialized to prevent re-initialization during background sync
+  const initializedEventIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!dialogEvent) return;
-    
-    setSummary(dialogEvent.summary || "");
-    setDescription(dialogEvent.description || "");
-    setLocation(dialogEvent.location || "");
-    setEventType(dialogEvent.eventType || "default");
-    
-    const allDay = dialogEvent.start ? checkIsAllDay(dialogEvent as GCalEvent) : false;
-    setIsAllDay(allDay);
-    
+
+    // Only initialize once per event - prevent reset during background sync
+    const eventKey = dialogEvent.id || "new";
+    if (initializedEventIdRef.current === eventKey) return;
+    initializedEventIdRef.current = eventKey;
+
+    const summaryVal = dialogEvent.summary || "";
+    const descriptionVal = dialogEvent.description || "";
+    const locationVal = dialogEvent.location || "";
+    const eventTypeVal = dialogEvent.eventType || "default";
+    const allDayVal = dialogEvent.start ? checkIsAllDay(dialogEvent as GCalEvent) : false;
+    // Default to first account for new events, or use existing account
+    const accountVal = dialogEvent.accountEmail || accounts[0]?.email || "";
+    // Default to primary calendar or existing calendar
+    // Look up the actual primary calendar ID for this account
+    const accountCalendars = calendarsByAccount[accountVal] || [];
+    const primaryCalendar = accountCalendars.find(c => c.primary);
+    const calendarVal = dialogEvent.calendarId || primaryCalendar?.id || accountCalendars[0]?.id || "";
+
+    let startDateVal = "";
+    let startTimeVal = "";
+    let endDateVal = "";
+    let endTimeVal = "";
+
     if (dialogEvent.start) {
       const start = parseTimeObject(dialogEvent.start, tz);
-      setStartDate(start.toFormat("yyyy-MM-dd"));
-      setStartTime(start.toFormat("HH:mm"));
+      startDateVal = start.toFormat("yyyy-MM-dd");
+      startTimeVal = start.toFormat("HH:mm");
     }
-    
+
     if (dialogEvent.end) {
       const end = parseTimeObject(dialogEvent.end, tz);
-      setEndDate(end.toFormat("yyyy-MM-dd"));
-      setEndTime(end.toFormat("HH:mm"));
+      endDateVal = end.toFormat("yyyy-MM-dd");
+      endTimeVal = end.toFormat("HH:mm");
     }
-    
-    if (dialogEvent.attendees) {
-      setAttendees(dialogEvent.attendees.map((a) => a.email));
+
+    const attendeesVal = dialogEvent.attendees?.map((a) => a.email) || [];
+
+    // Set current values
+    setSummary(summaryVal);
+    setDescription(descriptionVal);
+    setLocation(locationVal);
+    setEventType(eventTypeVal);
+    setIsAllDay(allDayVal);
+    setStartDate(startDateVal);
+    setStartTime(startTimeVal);
+    setEndDate(endDateVal);
+    setEndTime(endTimeVal);
+    setAttendees(attendeesVal);
+    setAccountEmail(accountVal);
+    setCalendarId(calendarVal);
+
+    // Clear when input on init
+    setWhenInput("");
+    setWhenPreview(null);
+
+    // Store original values for comparison
+    originalValuesRef.current = {
+      summary: summaryVal,
+      description: descriptionVal,
+      location: locationVal,
+      eventType: eventTypeVal,
+      isAllDay: allDayVal,
+      startDate: startDateVal,
+      startTime: startTimeVal,
+      endDate: endDateVal,
+      endTime: endTimeVal,
+      attendees: attendeesVal,
+      accountEmail: accountVal,
+    };
+  }, [dialogEvent, tz, accounts]);
+
+  // Check if there are unsaved changes
+  const hasChanges = useCallback(() => {
+    const orig = originalValuesRef.current;
+    if (!orig) return false;
+
+    return (
+      summary !== orig.summary ||
+      description !== orig.description ||
+      location !== orig.location ||
+      eventType !== orig.eventType ||
+      isAllDay !== orig.isAllDay ||
+      startDate !== orig.startDate ||
+      startTime !== orig.startTime ||
+      endDate !== orig.endDate ||
+      endTime !== orig.endTime ||
+      attendees.length !== orig.attendees.length ||
+      attendees.some((a, i) => a !== orig.attendees[i]) ||
+      accountEmail !== orig.accountEmail
+    );
+  }, [summary, description, location, eventType, isAllDay, startDate, startTime, endDate, endTime, attendees, accountEmail]);
+
+  const handleCancel = useCallback(() => {
+    if (hasChanges()) {
+      setShowDiscardConfirm(true);
     } else {
-      setAttendees([]);
+      initializedEventIdRef.current = null; // Reset for next dialog open
+      pop();
     }
-  }, [dialogEvent, tz]);
-  
-  if (!dialogEvent) return null;
-  
-  const handleSave = () => {
+  }, [hasChanges, pop]);
+
+  const handleDiscardConfirm = useCallback(() => {
+    setShowDiscardConfirm(false);
+    initializedEventIdRef.current = null; // Reset for next dialog open
+    pop();
+  }, [pop]);
+
+  const handleDiscardCancel = useCallback(() => {
+    setShowDiscardConfirm(false);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    if (!dialogEvent) return;
+
     const localTz = getLocalTimezone();
-    
+
     let start: GCalEvent["start"];
     let end: GCalEvent["end"];
-    
+
     if (isAllDay) {
+      // All-day events use date format
       start = { date: startDate };
       const endDt = DateTime.fromISO(endDate).plus({ days: 1 });
       end = { date: endDt.toFormat("yyyy-MM-dd") };
     } else {
-      const startDt = DateTime.fromISO(`${startDate}T${startTime}`, { zone: localTz });
-      const endDt = DateTime.fromISO(`${endDate}T${endTime}`, { zone: localTz });
+      // Timed events use dateTime format - ensure times have values
+      const effectiveStartTime = startTime || "09:00";
+      const effectiveEndTime = endTime || "10:00";
+
+      const startDt = DateTime.fromISO(`${startDate}T${effectiveStartTime}`, { zone: localTz });
+      const endDt = DateTime.fromISO(`${endDate}T${effectiveEndTime}`, { zone: localTz });
+
+      // Validate DateTime objects are valid
+      if (!startDt.isValid || !endDt.isValid) {
+        return; // Don't save if dates are invalid
+      }
+
       start = toTimeObject(startDt, false, localTz);
       end = toTimeObject(endDt, false, localTz);
     }
-    
+
     const updatedEvent: Partial<GCalEvent> = {
       ...dialogEvent,
       summary: summary || "",
@@ -125,12 +276,26 @@ export function EventDialog() {
       attendees: attendees.length > 0
         ? attendees.map((email) => ({ email, responseStatus: "needsAction" as const }))
         : undefined,
+      accountEmail: accountEmail || undefined,
+      calendarId: calendarId || "primary",
     };
-    
+
     setDialogEvent(updatedEvent);
+    initializedEventIdRef.current = null; // Reset for next dialog open
     save();
-  };
-  
+  }, [dialogEvent, isAllDay, startDate, endDate, startTime, endTime, summary, description, location, eventType, attendees, accountEmail, calendarId, setDialogEvent, save]);
+
+  // Handler for Ctrl+S in inputs
+  const handleInputKeyPress = useCallback((key: { name?: string; ctrl?: boolean }) => {
+    if (key.name === "s" && key.ctrl) {
+      handleSave();
+      return true;
+    }
+    return false;
+  }, [handleSave]);
+
+  if (!dialogEvent) return null;
+
   const addAttendee = () => {
     const email = attendeesInput.trim();
     if (email && email.includes("@") && !attendees.includes(email)) {
@@ -138,16 +303,66 @@ export function EventDialog() {
       setAttendeesInput("");
     }
   };
-  
+
   const removeAttendee = (email: string) => {
     setAttendees(attendees.filter((a) => a !== email));
   };
-  
+
+  // Handle natural language "when" input
+  const handleWhenChange = useCallback((value: string) => {
+    setWhenInput(value);
+    if (value.trim()) {
+      const parsed = parseNaturalDate(value);
+      setWhenPreview(parsed);
+    } else {
+      setWhenPreview(null);
+    }
+  }, []);
+
+  // Apply the parsed date when user presses Enter
+  const applyWhenInput = useCallback(() => {
+    if (whenPreview) {
+      setStartDate(whenPreview.date.toFormat("yyyy-MM-dd"));
+
+      if (whenPreview.isDateRange) {
+        // Date range: set as all-day event spanning multiple days
+        setIsAllDay(true);
+        setStartTime("");
+        setEndTime("");
+        // End date is exclusive in Google Calendar for all-day events
+        const endDateTime = whenPreview.endDate || whenPreview.date;
+        setEndDate(endDateTime.toFormat("yyyy-MM-dd"));
+      } else if (whenPreview.hasTime) {
+        // Timed event
+        setIsAllDay(false);
+        setStartTime(whenPreview.date.toFormat("HH:mm"));
+
+        // Use parsed end date if duration was specified, otherwise default to 1 hour
+        const endDateTime = whenPreview.endDate || whenPreview.date.plus({ hours: 1 });
+        setEndDate(endDateTime.toFormat("yyyy-MM-dd"));
+        setEndTime(endDateTime.toFormat("HH:mm"));
+      } else {
+        // Single all-day date
+        setIsAllDay(true);
+        setStartTime("");
+        setEndTime("");
+        setEndDate(whenPreview.date.toFormat("yyyy-MM-dd"));
+      }
+      setWhenInput("");
+      setWhenPreview(null);
+    }
+  }, [whenPreview]);
+
   const inputStyle = {
     color: theme.input.text,
     bg: theme.input.background,
   };
-  
+
+  const focusedInputStyle = {
+    bg: theme.accent.primary,
+    color: "black" as const,
+  };
+
   return (
     <Portal zIndex={20}>
       <Box
@@ -161,148 +376,273 @@ export function EventDialog() {
         <Box
           style={{
             width: DIALOG_WIDTH,
+            maxWidth: DIALOG_WIDTH,
+            maxHeight: maxDialogHeight,
             flexDirection: "column",
-            padding: 1,
+            paddingX: 1,
             bg: theme.modal.background,
+            border: "none",
+            clip: true,
           }}
         >
           <FocusScope trap>
-            <DialogKeybinds onSave={handleSave} />
-            
+            <DialogKeybinds onSave={handleSave} onCancel={handleCancel} />
+
             {/* Header */}
-            <Box style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Box style={{ flexDirection: "row", justifyContent: "space-between", clip: true }}>
               <Text style={{ bold: true, color: theme.accent.primary }}>
                 {isEditMode ? "Edit Event" : "New Event"}
               </Text>
               <Text style={{ color: theme.text.dim, dim: true }}>^S save</Text>
             </Box>
-            
-            {/* Form fields */}
-            <Box style={{ flexDirection: "column", paddingY: 1 }}>
-              {/* Title */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>title</Text>
-                <Input
-                  value={summary}
-                  onChange={setSummary}
-                  placeholder="Event title"
-                  style={{ ...inputStyle, flexGrow: 1 }}
-                />
-              </Box>
-              
-              {/* Type */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>type</Text>
-                <Select
-                  items={EVENT_TYPES}
-                  value={eventType}
-                  onChange={(v) => setEventType(v as EventType)}
-                  highlightColor={theme.accent.primary}
-                  style={{ bg: theme.input.background }}
-                />
-                <Checkbox
-                  checked={isAllDay}
-                  onChange={setIsAllDay}
-                  label="all-day"
-                  focusedStyle={{ color: theme.accent.primary }}
-                />
-              </Box>
-              
-              {/* Start */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>start</Text>
-                <Input
-                  value={startDate}
-                  onChange={setStartDate}
-                  placeholder="YYYY-MM-DD"
-                  style={{ ...inputStyle, width: 12 }}
-                />
-                {!isAllDay && (
-                  <Input
-                    value={startTime}
-                    onChange={setStartTime}
-                    placeholder="HH:MM"
-                    style={{ ...inputStyle, width: 7 }}
-                  />
-                )}
-              </Box>
-              
-              {/* End */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>end</Text>
-                <Input
-                  value={endDate}
-                  onChange={setEndDate}
-                  placeholder="YYYY-MM-DD"
-                  style={{ ...inputStyle, width: 12 }}
-                />
-                {!isAllDay && (
-                  <Input
-                    value={endTime}
-                    onChange={setEndTime}
-                    placeholder="HH:MM"
-                    style={{ ...inputStyle, width: 7 }}
-                  />
-                )}
-              </Box>
-              
-              {/* Location */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>location</Text>
-                <Input
-                  value={location}
-                  onChange={setLocation}
-                  placeholder="Add location"
-                  style={{ ...inputStyle, flexGrow: 1 }}
-                />
-              </Box>
-              
-              {/* Attendees */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>guests</Text>
-                <Input
-                  value={attendeesInput}
-                  onChange={setAttendeesInput}
-                  onKeyPress={(key) => {
-                    if (key.name === "return" && attendeesInput.trim()) {
-                      addAttendee();
-                    }
-                  }}
-                  placeholder="email@example.com"
-                  style={{ ...inputStyle, flexGrow: 1 }}
-                />
-              </Box>
-              
-              {/* Attendees list */}
-              {attendees.length > 0 && (
-                <Box style={{ flexDirection: "column", paddingLeft: 9 }}>
-                  {attendees.map((email) => (
-                    <Box key={email} style={{ flexDirection: "row", gap: 1 }}>
-                      <Text style={{ color: theme.text.secondary }}>· {email}</Text>
-                      <Button onPress={() => removeAttendee(email)}>
-                        <Text style={{ color: theme.accent.error }}>×</Text>
-                      </Button>
-                    </Box>
-                  ))}
+
+            {/* Form fields - scrollable */}
+            <ScrollView style={{ flexGrow: 1, flexShrink: 1 }}>
+              <Box style={{ flexDirection: "column", paddingY: 1, clip: true }}>
+                {/* Title */}
+                <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>title</Text>
+                  <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                    <Input
+                      value={summary}
+                      onChange={setSummary}
+                      placeholder="Event title"
+                      style={{ ...inputStyle }}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={handleInputKeyPress}
+                    />
+                  </Box>
                 </Box>
-              )}
-              
-              {/* Notes */}
-              <Box style={{ flexDirection: "row", gap: 1 }}>
-                <Text style={{ color: theme.text.dim, width: 8 }}>notes</Text>
-                <Input
-                  value={description}
-                  onChange={setDescription}
-                  placeholder="Add notes"
-                  style={{ ...inputStyle, flexGrow: 1 }}
-                />
+
+                {/* Account */}
+                {accounts.length > 0 && (
+                  <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+                    <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>account</Text>
+                    <Select
+                      items={accounts.map((acc) => ({
+                        label: acc.email,
+                        value: acc.email
+                      }))}
+                      value={accountEmail}
+                      onChange={(email) => {
+                        setAccountEmail(email);
+                        // Reset to primary calendar when account changes
+                        const newAccountCalendars = calendarsByAccount[email] || [];
+                        const newPrimaryCal = newAccountCalendars.find(c => c.primary);
+                        setCalendarId(newPrimaryCal?.id || newAccountCalendars[0]?.id || "");
+                      }}
+                      highlightColor={theme.accent.primary}
+                      style={{ bg: theme.input.background }}
+                      focusedStyle={focusedInputStyle}
+                    />
+                  </Box>
+                )}
+
+                {/* Calendar */}
+                <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>calendar</Text>
+                  <Text style={{ color: getCalendarColor(accountEmail, calendarId || calendarsForAccount.find(c => c.primary)?.id, calendarColorMap) }}>●</Text>
+                  <Select
+                    items={calendarsForAccount.map((cal) => ({
+                      label: cal.primary ? `★ ${cal.summary}` : cal.summary,
+                      value: cal.id
+                    }))}
+                    disabled={calendarsForAccount.length === 0}
+                    value={calendarId ?? calendarsForAccount.find(c => c.primary)?.id}
+                    onChange={setCalendarId}
+                    placeholder={calendarsForAccount.length ? "Select Calendar" : "Loading..."}
+                    highlightColor={theme.accent.primary}
+                    style={{ bg: theme.input.background }}
+                    focusedStyle={focusedInputStyle}
+                  />
+                </Box>
+
+                {/* Type */}
+                <Box style={{ flexDirection: "row", gap: 1 }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>type</Text>
+                  <Select
+                    items={EVENT_TYPES}
+                    value={eventType}
+                    onChange={(v) => setEventType(v as EventType)}
+                    highlightColor={theme.accent.primary}
+                    style={{ bg: theme.input.background }}
+                    focusedStyle={focusedInputStyle}
+                  />
+                  <Checkbox
+                    checked={isAllDay}
+                    onChange={(checked) => {
+                      setIsAllDay(checked);
+                      // When unchecking all-day, ensure times have default values
+                      if (!checked) {
+                        if (!startTime) setStartTime("09:00");
+                        if (!endTime) setEndTime("10:00");
+                      }
+                    }}
+                    label="all-day"
+                    focusedStyle={{ color: theme.accent.primary }}
+                  />
+                </Box>
+
+                {/* Natural language date input */}
+                <Box style={{ flexDirection: "column", gap: 0 }}>
+                  <Box style={{ flexDirection: "row", gap: 1 }}>
+                    <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>when</Text>
+                    <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                      <Input
+                        value={whenInput}
+                        onChange={handleWhenChange}
+                        onKeyPress={(key) => {
+                          if (key.name === "s" && key.ctrl) {
+                            handleSave();
+                            return true;
+                          }
+                          if (key.name === "return" && whenPreview) {
+                            applyWhenInput();
+                            return true;
+                          }
+                          return false;
+                        }}
+                        placeholder="tomorrow 3pm, from mar 5 for 2 weeks..."
+                        style={{ ...inputStyle }}
+                        focusedStyle={focusedInputStyle}
+                      />
+                    </Box>
+                  </Box>
+                  {whenPreview && (
+                    <Box style={{ flexDirection: "row", gap: 1, marginLeft: LABEL_WIDTH + 1 }}>
+                      <Text style={{ color: theme.accent.success, dim: true }}>
+                        → {formatParsedPreview(whenPreview)} (Enter to apply)
+                      </Text>
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Start */}
+                <Box style={{ flexDirection: "row", gap: 1 }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>start</Text>
+                  <Input
+                    value={startDate}
+                    onChange={setStartDate}
+                    onBeforeChange={dateMask}
+                    placeholder="YYYY-MM-DD"
+                    style={{ ...inputStyle, width: 12 }}
+                    focusedStyle={focusedInputStyle}
+                    onKeyPress={handleInputKeyPress}
+                  />
+                  {!isAllDay && (
+                    <Input
+                      value={startTime}
+                      onChange={setStartTime}
+                      onBeforeChange={timeMask}
+                      placeholder="HH:MM"
+                      style={{ ...inputStyle, width: 7 }}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={handleInputKeyPress}
+                    />
+                  )}
+                </Box>
+
+                {/* End */}
+                <Box style={{ flexDirection: "row", gap: 1 }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>end</Text>
+                  <Input
+                    value={endDate}
+                    onChange={setEndDate}
+                    onBeforeChange={dateMask}
+                    placeholder="YYYY-MM-DD"
+                    style={{ ...inputStyle, width: 12 }}
+                    focusedStyle={focusedInputStyle}
+                    onKeyPress={handleInputKeyPress}
+                  />
+                  {!isAllDay && (
+                    <Input
+                      value={endTime}
+                      onChange={setEndTime}
+                      onBeforeChange={timeMask}
+                      placeholder="HH:MM"
+                      style={{ ...inputStyle, width: 7 }}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={handleInputKeyPress}
+                    />
+                  )}
+                </Box>
+
+                {/* Location */}
+                <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>location</Text>
+                  <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                    <Input
+                      value={location}
+                      onChange={setLocation}
+                      placeholder="Add location"
+                      style={{ ...inputStyle }}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={handleInputKeyPress}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Attendees */}
+                <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>guests</Text>
+                  <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                    <Input
+                      value={attendeesInput}
+                      onChange={setAttendeesInput}
+                      onKeyPress={(key) => {
+                        if (key.name === "s" && key.ctrl) {
+                          handleSave();
+                          return true;
+                        }
+                        if (key.name === "return" && attendeesInput.trim()) {
+                          addAttendee();
+                          return true;
+                        }
+                        return false;
+                      }}
+                      placeholder="email@example.com"
+                      style={{ ...inputStyle }}
+                      focusedStyle={focusedInputStyle}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Attendees list */}
+                {attendees.length > 0 && (
+                  <Box style={{ flexDirection: "column", paddingLeft: 9, clip: true }}>
+                    {attendees.map((email) => (
+                      <Box key={email} style={{ flexDirection: "row", gap: 1, clip: true }}>
+                        <Text style={{ color: theme.text.secondary }} wrap="truncate">· {email}</Text>
+                        <Button onPress={() => removeAttendee(email)}>
+                          <Text style={{ color: theme.accent.error }}>×</Text>
+                        </Button>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+
+                {/* Notes */}
+                <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>notes</Text>
+                  <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                    <Input
+                      value={description}
+                      onChange={setDescription}
+                      placeholder="Add notes"
+                      style={{ ...inputStyle }}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={handleInputKeyPress}
+                      multiline
+                    />
+                  </Box>
+                </Box>
               </Box>
-            </Box>
-            
+            </ScrollView>
+
             {/* Footer */}
             <Box style={{ flexDirection: "row", gap: 1, justifyContent: "flex-end" }}>
               <Button
-                onPress={() => pop()}
+                onPress={handleCancel}
                 style={{ paddingX: 1 }}
                 focusedStyle={{ bg: theme.text.dim, color: "black" }}
               >
@@ -319,6 +659,80 @@ export function EventDialog() {
           </FocusScope>
         </Box>
       </Box>
+
+      {/* Discard changes confirmation */}
+      {showDiscardConfirm && (
+        <DiscardConfirmDialog
+          onDiscard={handleDiscardConfirm}
+          onCancel={handleDiscardCancel}
+        />
+      )}
     </Portal>
+  );
+}
+
+function DiscardConfirmDialog({
+  onDiscard,
+  onCancel,
+}: {
+  onDiscard: () => void;
+  onCancel: () => void;
+}) {
+  useInput((key) => {
+    if (key.name === "y" || key.name === "return") {
+      onDiscard();
+    } else if (key.name === "n" || key.name === "escape") {
+      onCancel();
+    }
+  });
+
+  return (
+    <Box
+      style={{
+        position: "absolute",
+        inset: 0,
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 100,
+      }}
+    >
+      <Box
+        style={{
+          width: 35,
+          flexDirection: "column",
+          gap: 1,
+          padding: 1,
+          bg: theme.modal.background,
+          border: "single",
+          borderColor: theme.modal.border,
+        }}
+      >
+        <FocusScope trap>
+          <Text style={{ bold: true, color: theme.accent.warning }}>
+            Discard changes?
+          </Text>
+          <Text style={{ color: theme.text.dim }}>
+            You have unsaved changes.
+          </Text>
+
+          <Box style={{ flexDirection: "row", gap: 2, paddingTop: 1 }}>
+            <Button
+              onPress={onDiscard}
+              style={{ paddingX: 1, bg: theme.input.background }}
+              focusedStyle={{ bg: theme.accent.error, color: "black", bold: true }}
+            >
+              <Text>[y]es, discard</Text>
+            </Button>
+            <Button
+              onPress={onCancel}
+              style={{ paddingX: 1, bg: theme.input.background }}
+              focusedStyle={{ bg: theme.text.dim, color: "black" }}
+            >
+              <Text>[n]o, keep editing</Text>
+            </Button>
+          </Box>
+        </FocusScope>
+      </Box>
+    </Box>
   );
 }

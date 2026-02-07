@@ -13,6 +13,7 @@ import {
   continueDeleteWithScopeAtom,
   continueDeleteWithNotifyAtom,
   continueEditWithScopeAtom,
+  updateAttendanceAtom,
 } from "../state/actions.ts";
 import { getDisplayTitle } from "../domain/gcalEvent.ts";
 import { theme } from "./theme.ts";
@@ -26,6 +27,7 @@ export function ConfirmModal() {
   const continueDeleteWithScope = useSetAtom(continueDeleteWithScopeAtom);
   const continueDeleteWithNotify = useSetAtom(continueDeleteWithNotifyAtom);
   const continueEditWithScope = useSetAtom(continueEditWithScopeAtom);
+  const updateAttendance = useSetAtom(updateAttendanceAtom);
   
   const [selectedScope, setSelectedScope] = useState<RecurrenceScope>("this");
   
@@ -223,5 +225,72 @@ export function ConfirmModal() {
     );
   }
   
+  // Leave event confirmation (for non-organizers)
+  if (modalType === "leaveEvent") {
+    const eventId = overlay.payload?.eventId as string;
+
+    return (
+      <Portal zIndex={50}>
+        <Box
+          style={{
+            position: "absolute",
+            inset: 0,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Box
+            style={{
+              width: 45,
+              flexDirection: "column",
+              gap: 1,
+              padding: 1,
+              bg: theme.modal.background,
+              border: "single",
+              borderColor: theme.modal.border,
+            }}
+          >
+            <FocusScope trap>
+              <Text style={{ bold: true, color: theme.accent.warning }}>
+                Leave "{eventTitle}"?
+              </Text>
+              <Text style={{ color: theme.text.dim }}>
+                You can't delete this event because you're
+              </Text>
+              <Text style={{ color: theme.text.dim }}>
+                not the organizer. Would you like to
+              </Text>
+              <Text style={{ color: theme.text.dim }}>
+                decline and remove from your calendar?
+              </Text>
+
+              <Box style={{ flexDirection: "row", gap: 2, paddingTop: 1 }}>
+                <Button
+                  onPress={() => {
+                    if (eventId) {
+                      updateAttendance({ eventId, status: "declined" });
+                    }
+                    pop();
+                  }}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.accent.warning, color: "black", bold: true }}
+                >
+                  <Text>leave</Text>
+                </Button>
+                <Button
+                  onPress={() => pop()}
+                  style={{ paddingX: 1, bg: theme.input.background }}
+                  focusedStyle={{ bg: theme.text.dim, color: "black" }}
+                >
+                  <Text>cancel</Text>
+                </Button>
+              </Box>
+            </FocusScope>
+          </Box>
+        </Box>
+      </Portal>
+    );
+  }
+
   return null;
 }

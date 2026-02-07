@@ -28,6 +28,7 @@ const ThemeSchema = z.object({
     primary: TerminalColorSchema.default("white"),
     secondary: TerminalColorSchema.default("whiteBright"),
     dim: TerminalColorSchema.default("blackBright"),
+    weekend: TerminalColorSchema.default("redBright"),
   }).default({}),
   accent: z.object({
     primary: TerminalColorSchema.default("cyan"),

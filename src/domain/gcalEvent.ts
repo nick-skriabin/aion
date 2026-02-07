@@ -116,6 +116,29 @@ export function hasOtherAttendees(event: GCalEvent): boolean {
   return event.attendees.some((a) => !a.self && !a.organizer);
 }
 
+/**
+ * Check if the current user is the organizer of the event
+ */
+export function isOrganizer(event: GCalEvent): boolean {
+  return event.organizer?.self === true;
+}
+
+/**
+ * Check if the current user can fully edit this event
+ * Users can only fully edit events they organized
+ */
+export function canEdit(event: GCalEvent): boolean {
+  return isOrganizer(event);
+}
+
+/**
+ * Check if this is a read-only event for the current user
+ * (they're an attendee but not the organizer)
+ */
+export function isReadOnly(event: GCalEvent): boolean {
+  return !isOrganizer(event);
+}
+
 export function getDisplayTitle(event: GCalEvent): string {
   return event.summary?.trim() || "(No title)";
 }

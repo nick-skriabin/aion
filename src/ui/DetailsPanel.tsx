@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { Box, Text, Portal, ScrollView, FocusScope, Keybind } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
-import { selectedEventAtom, timezoneAtom, focusAtom } from "../state/atoms.ts";
-import { updateAttendanceAtom, openEditDialogAtom, initiateDeleteAtom } from "../state/actions.ts";
+import { selectedEventAtom, timezoneAtom, focusAtom, calendarColorMapAtom, getCalendarColor, calendarsAtom } from "../state/atoms.ts";
+import { updateAttendanceAtom, openEditDialogAtom, initiateDeleteAtom, proposeNewTimeAtom } from "../state/actions.ts";
 import { ScopedKeybinds } from "../keybinds/useKeybinds.tsx";
 import {
   getDisplayTitle,
   getEventTypeLabel,
   isAllDay,
   isRecurring,
+  isOrganizer,
   getResponseStatusIcon,
   getVisibilityLabel,
   parseRecurrenceRule,
@@ -18,8 +19,8 @@ import {
 import { getEventStart, getEventEnd, formatTimeRange, formatDayHeader, getLocalTimezone } from "../domain/time.ts";
 import { theme } from "./theme.ts";
 
-const LABEL_WIDTH = 8;
-const PANEL_WIDTH = 44;
+const LABEL_WIDTH = 10;
+const PANEL_WIDTH = 48;
 
 // Extract just the city/location from timezone (e.g., "Europe/Lisbon" -> "Lisbon")
 function formatTimezoneShort(tz: string): string {
@@ -107,6 +108,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+// Format email in standard format: "Name <email>" or just "email" if no name
+function formatEmailWithName(email: string, displayName?: string): string {
+  if (displayName && displayName !== email) {
+    return `${displayName} <${email}>`;
+  }
+  return email;
+}
+
 function AttendanceButtons({ 
   currentStatus, 
 }: { 
@@ -139,19 +148,28 @@ function AttendanceButtons({
   );
 }
 
+
 export function DetailsPanel() {
   const event = useAtomValue(selectedEventAtom);
   const tz = useAtomValue(timezoneAtom);
   const focus = useAtomValue(focusAtom);
+  const calendarColorMap = useAtomValue(calendarColorMapAtom);
+  const calendars = useAtomValue(calendarsAtom);
   const updateAttendance = useSetAtom(updateAttendanceAtom);
   const openEditDialog = useSetAtom(openEditDialogAtom);
   const initiateDelete = useSetAtom(initiateDeleteAtom);
+  const proposeNewTime = useSetAtom(proposeNewTimeAtom);
   
   // Toggle between local and original timezone
   const [showOriginalTz, setShowOriginalTz] = useState(false);
 
   if (!event) return null;
   
+  // Find calendar name for this event
+  const calendarName = calendars.find(
+    (c) => c.id === event.calendarId && c.accountEmail === event.accountEmail
+  )?.summary;
+
   const title = getDisplayTitle(event);
   const allDay = isAllDay(event);
   const recurring = isRecurring(event);
@@ -202,10 +220,11 @@ export function DetailsPanel() {
     declineInvite: () => updateAttendance({ eventId: event.id, status: "declined" }),
     tentativeInvite: () => updateAttendance({ eventId: event.id, status: "tentative" }),
     editEvent: () => openEditDialog(),
+    proposeNewTime: () => proposeNewTime(),
     deleteEvent: () => initiateDelete(),
     openMeetingLink: meetingLink ? () => Bun.spawn(["open", meetingLink]) : undefined,
     toggleTimezone: hasOriginalTz ? toggleTimezone : undefined,
-  }), [event.id, meetingLink, updateAttendance, openEditDialog, initiateDelete, hasOriginalTz, showOriginalTz]);
+  }), [event.id, meetingLink, updateAttendance, openEditDialog, proposeNewTime, initiateDelete, hasOriginalTz, showOriginalTz]);
   
   return (
     <Portal zIndex={10}>
@@ -241,6 +260,37 @@ export function DetailsPanel() {
               </Text>
             </Row>
             
+              {/* Account */}
+              {event.accountEmail && (
+                <Row label="account">
+                  <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+                    <Text style={{ color: getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap) }}>●</Text>
+                    <Text style={{ color: theme.text.secondary }} wrap="truncate">
+                      {event.accountEmail}
+                    </Text>
+                  </Box>
+                </Row>
+              )}
+
+              {/* Calendar */}
+              {calendarName && calendarName !== event.accountEmail && (
+                <Row label="calendar">
+                  <Text style={{ color: theme.text.secondary }} wrap="truncate">
+                    {calendarName}
+                  </Text>
+                </Row>
+              )}
+
+              {/* Organizer */}
+              {event.organizer && (
+                <Row label="organizer">
+                  <Text style={{ color: theme.text.secondary }} wrap="truncate">
+                    {formatEmailWithName(event.organizer.email, event.organizer.displayName)}
+                    {event.organizer.self && " (you)"}
+                  </Text>
+                </Row>
+              )}
+
             {/* Type & Recurring */}
             <Row label="type">
               <Box style={{ flexDirection: "row", gap: 1 }}>
@@ -344,7 +394,7 @@ export function DetailsPanel() {
                         {getResponseStatusIcon(attendee.responseStatus)}
                       </Text>
                       <Text style={{ color: theme.text.primary }} wrap="truncate">
-                        {attendee.displayName || attendee.email}
+                        {formatEmailWithName(attendee.email, attendee.displayName)}
                       </Text>
                     </Box>
                   </Row>
@@ -386,8 +436,17 @@ export function DetailsPanel() {
         
           {/* Footer */}
           <Box style={{ paddingTop: 1, flexDirection: "row", gap: 2 }}>
-            <Text style={{ color: theme.text.dim }}>e:edit</Text>
-            <Text style={{ color: theme.text.dim }}>D:delete</Text>
+            {isOrganizer(event) ? (
+              <>
+                <Text style={{ color: theme.text.dim }}>e:edit</Text>
+                <Text style={{ color: theme.text.dim }}>D:delete</Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ color: theme.text.dim }}>p:propose time</Text>
+                <Text style={{ color: theme.text.dim }}>D:leave</Text>
+              </>
+            )}
             {meetingLink && (
               <Text style={{ color: theme.text.dim }}>o:open</Text>
             )}

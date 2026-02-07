@@ -193,16 +193,7 @@ export const eventsRepo = {
     return rows.length === 0;
   },
 
-  // Seed with mock data
-  async seed(mockEvents: GCalEvent[]): Promise<void> {
-    const db = getDb();
-    const rows = mockEvents.map(toRow);
-    for (const row of rows) {
-      await db.insert(events).values(row);
-    }
-  },
-
-  // Clear all events (for testing)
+  // Clear all events
   async clear(): Promise<void> {
     const db = getDb();
     await db.delete(events);

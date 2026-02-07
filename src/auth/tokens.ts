@@ -275,10 +275,12 @@ export async function getValidAccessToken(): Promise<string | null> {
 }
 
 /**
- * Exchange authorization code for tokens
+ * Exchange authorization code for tokens (with PKCE)
+ * @param code - Authorization code from OAuth callback
+ * @param codeVerifier - PKCE code verifier used when generating the auth URL
  */
-export async function exchangeCodeForTokens(code: string): Promise<TokenData> {
-  authLogger.debug("Exchanging authorization code for tokens");
+export async function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenData> {
+  authLogger.debug("Exchanging authorization code for tokens (with PKCE)");
   
   const response = await fetch(OAUTH_CONFIG.tokenUrl, {
     method: "POST",
@@ -291,6 +293,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenData> {
       client_secret: GOOGLE_CLIENT_SECRET,
       redirect_uri: OAUTH_CONFIG.redirectUri,
       grant_type: "authorization_code",
+      code_verifier: codeVerifier, // PKCE verification
     }),
   });
   

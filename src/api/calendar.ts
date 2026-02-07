@@ -3,9 +3,10 @@
  */
 
 import { getValidAccessToken, getValidAccessTokenForAccount, getAccounts } from "../auth/tokens.ts";
-import type { GCalEvent } from "../domain/gcalEvent.ts";
+import type { GCalEvent, Attendee, Organizer } from "../domain/gcalEvent.ts";
 import { apiLogger } from "../lib/logger.ts";
 import { makeCompositeId, extractGoogleId } from "../db/eventsRepo.ts";
+import { prefetchContactNames, getDisplayName } from "./contacts.ts";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
@@ -63,16 +64,23 @@ export interface CalendarListEntry {
  * Get list of user's calendars for a specific account
  */
 export async function getCalendarListForAccount(accountEmail: string): Promise<CalendarListEntry[]> {
-  const response = await calendarFetch<{ items: CalendarListEntry[] }>(
-    "/users/me/calendarList",
-    {},
-    accountEmail
-  );
-  // Tag each calendar with its account
-  return (response.items || []).map((cal) => ({
-    ...cal,
-    accountEmail,
-  }));
+  apiLogger.debug(`getCalendarListForAccount starting for ${accountEmail}`);
+  try {
+    const response = await calendarFetch<{ items: CalendarListEntry[] }>(
+      "/users/me/calendarList",
+      {},
+      accountEmail
+    );
+    apiLogger.debug(`getCalendarListForAccount got response for ${accountEmail}`, { itemCount: response.items?.length });
+    // Tag each calendar with its account
+    return (response.items || []).map((cal) => ({
+      ...cal,
+      accountEmail,
+    }));
+  } catch (error) {
+    apiLogger.error(`getCalendarListForAccount failed for ${accountEmail}`, error);
+    throw error;
+  }
 }
 
 /**
@@ -80,17 +88,21 @@ export async function getCalendarListForAccount(accountEmail: string): Promise<C
  */
 export async function getAllCalendars(): Promise<CalendarListEntry[]> {
   const accounts = await getAccounts();
+  apiLogger.debug(`Fetching calendars for ${accounts.length} accounts`);
   const allCalendars: CalendarListEntry[] = [];
   
   for (const account of accounts) {
     try {
+      apiLogger.debug(`Fetching calendars for ${account.account.email}`);
       const calendars = await getCalendarListForAccount(account.account.email);
+      apiLogger.debug(`Got ${calendars.length} calendars for ${account.account.email}`);
       allCalendars.push(...calendars);
     } catch (error) {
       apiLogger.error(`Failed to fetch calendars for ${account.account.email}`, error);
     }
   }
   
+  apiLogger.debug(`Total calendars fetched: ${allCalendars.length}`);
   return allCalendars;
 }
 
@@ -141,7 +153,7 @@ interface GoogleCalendarEvent {
     self?: boolean;
   };
   organizer?: {
-    email?: string;
+    email: string;
     displayName?: string;
     self?: boolean;
   };
@@ -427,7 +439,70 @@ export async function fetchAllEvents(options: {
     }
   }
   
+  // Enrich events with display names from contacts
+  await enrichEventsWithDisplayNames(allEvents);
+  
   return { events: allEvents, syncTokens };
+}
+
+/**
+ * Collect all unique emails from events (attendees + organizers)
+ */
+function collectEmailsFromEvents(events: GCalEvent[]): string[] {
+  const emails = new Set<string>();
+  
+  for (const event of events) {
+    if (event.organizer?.email) {
+      emails.add(event.organizer.email);
+    }
+    if (event.attendees) {
+      for (const attendee of event.attendees) {
+        if (attendee.email) {
+          emails.add(attendee.email);
+        }
+      }
+    }
+  }
+  
+  return Array.from(emails);
+}
+
+/**
+ * Enrich events with display names from contacts cache
+ */
+async function enrichEventsWithDisplayNames(events: GCalEvent[]): Promise<void> {
+  // Collect all emails and prefetch their names
+  const emails = collectEmailsFromEvents(events);
+  
+  if (emails.length === 0) return;
+  
+  apiLogger.debug(`Enriching display names for ${emails.length} unique emails`);
+  
+  // Prefetch all names (this will hit People API and cache results)
+  await prefetchContactNames(emails);
+  
+  // Now enrich each event
+  for (const event of events) {
+    // Enrich organizer
+    if (event.organizer?.email && !event.organizer.displayName) {
+      const name = await getDisplayName(event.organizer.email);
+      if (name) {
+        (event.organizer as Organizer).displayName = name;
+      }
+    }
+    
+    // Enrich attendees
+    if (event.attendees) {
+      for (const attendee of event.attendees) {
+        if (attendee.email && !attendee.displayName) {
+          const name = await getDisplayName(attendee.email);
+          if (name) {
+            (attendee as Attendee).displayName = name;
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -496,6 +571,11 @@ export async function incrementalSyncAll(
     }
   }
   
+  // Enrich changed events with display names
+  if (changed.length > 0) {
+    await enrichEventsWithDisplayNames(changed);
+  }
+  
   return { changed, deleted, syncTokens, calendarsRequiringFullSync };
 }
 
@@ -520,17 +600,37 @@ export async function createEvent(
 }
 
 /**
+ * Recurrence scope for updates
+ */
+export type RecurrenceScope = "this" | "following" | "all";
+
+/**
  * Update an existing event
- * @param eventId - The composite ID (accountEmail:googleId) or just googleId for local events
+ * @param eventId - The composite ID (accountEmail:calendarId:googleId) or just googleId for local events
+ * @param event - The event data to update
+ * @param calendarId - Calendar ID
+ * @param accountEmail - Account email for multi-account support
+ * @param scope - For recurring events: "this" (just this instance), "all" (all instances), "following" (this and future)
+ * @param originalEvent - The original event (needed for "following" scope to get recurringEventId)
  */
 export async function updateEvent(
   eventId: string,
   event: Partial<GCalEvent>,
   calendarId = "primary",
-  accountEmail?: string
+  accountEmail?: string,
+  scope?: RecurrenceScope,
+  originalEvent?: GCalEvent
 ): Promise<GCalEvent> {
   // Extract the Google ID from composite ID for API call
-  const googleId = extractGoogleId(eventId);
+  let googleId = extractGoogleId(eventId);
+  
+  // Handle recurring event scope
+  if (scope === "all" && originalEvent?.recurringEventId) {
+    // Update the master recurring event (affects all instances)
+    googleId = originalEvent.recurringEventId;
+  }
+  // For "this" scope, we just update the specific instance (default behavior)
+  // For "following" scope, Google doesn't have a direct API - would need to create exception rules
   
   const response = await calendarFetch<GoogleCalendarEvent>(
     `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleId)}`,

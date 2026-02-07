@@ -1,8 +1,9 @@
 /**
  * OAuth flow implementation with temporary HTTP server (multi-account support)
+ * Uses PKCE (Proof Key for Code Exchange) for enhanced security
  */
 
-import { getAuthUrl, OAUTH_CONFIG } from "./credentials.ts";
+import { getAuthUrl, getIncrementalAuthUrl, OAUTH_CONFIG, generatePKCE } from "./credentials.ts";
 import { authLogger } from "../lib/logger.ts";
 import {
   exchangeCodeForTokens,
@@ -35,12 +36,12 @@ function generateState(): string {
 /**
  * HTML page shown after successful login
  */
-function getSuccessHtml(email: string): string {
+function getSuccessHtml(email: string, title = "Login Successful!"): string {
   return `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Aion - Login Successful</title>
+  <title>Aion - ${title}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -80,7 +81,7 @@ function getSuccessHtml(email: string): string {
 <body>
   <div class="container">
     <div class="icon">✅</div>
-    <h1>Login Successful!</h1>
+    <h1>${title}</h1>
     <p>You can close this window and return to Aion.</p>
     <div class="email">${email}</div>
   </div>
@@ -152,21 +153,26 @@ function getErrorHtml(error: string): string {
 /**
  * Start the OAuth login flow to add a new account
  * 
- * 1. Starts a temporary HTTP server on localhost
- * 2. Opens the browser to Google's consent screen
- * 3. Waits for the callback with the authorization code
- * 4. Exchanges the code for tokens
- * 5. Fetches user info to identify the account
- * 6. Saves tokens and shuts down the server
+ * Uses PKCE (Proof Key for Code Exchange) for enhanced security:
+ * 1. Generates PKCE code_verifier and code_challenge
+ * 2. Starts a temporary HTTP server on localhost
+ * 3. Opens the browser to Google's consent screen (with code_challenge)
+ * 4. Waits for the callback with the authorization code
+ * 5. Exchanges the code for tokens (with code_verifier)
+ * 6. Fetches user info to identify the account
+ * 7. Saves tokens and shuts down the server
  */
 export async function startLoginFlow(callbacks?: {
   onAuthUrl?: (url: string) => void;
   onSuccess?: (account: AccountInfo) => void;
   onError?: (error: string) => void;
 }): Promise<LoginResult> {
-  authLogger.info("Starting OAuth login flow");
+  authLogger.info("Starting OAuth login flow with PKCE");
+  
+  // Generate PKCE parameters
+  const { codeVerifier, codeChallenge } = await generatePKCE();
   const state = generateState();
-  const authUrl = getAuthUrl(state);
+  const authUrl = getAuthUrl(state, codeChallenge);
   
   return new Promise((resolve) => {
     let server: ReturnType<typeof Bun.serve> | null = null;
@@ -239,9 +245,9 @@ export async function startLoginFlow(callbacks?: {
           }
           
           try {
-            // Exchange code for tokens
-            authLogger.debug("Received authorization code, exchanging for tokens");
-            const tokens = await exchangeCodeForTokens(code);
+            // Exchange code for tokens (with PKCE code_verifier)
+            authLogger.debug("Received authorization code, exchanging for tokens with PKCE");
+            const tokens = await exchangeCodeForTokens(code, codeVerifier);
             
             // Fetch user info to identify the account
             authLogger.debug("Fetching user info");
@@ -290,6 +296,135 @@ export async function startLoginFlow(callbacks?: {
       Bun.spawn(["open", authUrl]);
     } catch {
       // If auto-open fails, user can click the link manually
+    }
+  });
+}
+
+/**
+ * Upgrade permissions for an existing account (incremental consent)
+ * Shows consent screen only for NEW scopes, keeps existing ones
+ * Uses PKCE for enhanced security
+ */
+export async function upgradePermissions(
+  email: string,
+  callbacks?: {
+    onAuthUrl?: (url: string) => void;
+    onSuccess?: (account: AccountInfo) => void;
+    onError?: (error: string) => void;
+  }
+): Promise<LoginResult> {
+  authLogger.info("Starting permission upgrade flow with PKCE", { email });
+  
+  // Generate PKCE parameters
+  const { codeVerifier, codeChallenge } = await generatePKCE();
+  const state = generateState();
+  const authUrl = getIncrementalAuthUrl(email, state, codeChallenge);
+  
+  return new Promise((resolve) => {
+    let server: ReturnType<typeof Bun.serve> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (server) {
+        server.stop();
+        server = null;
+      }
+    };
+    
+    timeoutId = setTimeout(() => {
+      cleanup();
+      const error = "Permission upgrade timed out. Please try again.";
+      callbacks?.onError?.(error);
+      resolve({ success: false, error });
+    }, TIMEOUT_MS);
+    
+    server = Bun.serve({
+      port: OAUTH_CONFIG.port,
+      
+      async fetch(req) {
+        const url = new URL(req.url);
+        
+        if (url.pathname === "/callback") {
+          const code = url.searchParams.get("code");
+          const returnedState = url.searchParams.get("state");
+          const error = url.searchParams.get("error");
+          
+          if (error) {
+            cleanup();
+            const errorMsg = `Google returned error: ${error}`;
+            callbacks?.onError?.(errorMsg);
+            resolve({ success: false, error: errorMsg });
+            return new Response(getErrorHtml(errorMsg), {
+              headers: { "Content-Type": "text/html" },
+            });
+          }
+          
+          if (returnedState !== state) {
+            cleanup();
+            const errorMsg = "Invalid state parameter.";
+            callbacks?.onError?.(errorMsg);
+            resolve({ success: false, error: errorMsg });
+            return new Response(getErrorHtml(errorMsg), {
+              headers: { "Content-Type": "text/html" },
+            });
+          }
+          
+          if (!code) {
+            cleanup();
+            const errorMsg = "No authorization code received.";
+            callbacks?.onError?.(errorMsg);
+            resolve({ success: false, error: errorMsg });
+            return new Response(getErrorHtml(errorMsg), {
+              headers: { "Content-Type": "text/html" },
+            });
+          }
+          
+          try {
+            authLogger.debug("Exchanging code for upgraded tokens with PKCE");
+            const tokens = await exchangeCodeForTokens(code, codeVerifier);
+            
+            authLogger.debug("Fetching user info");
+            const userInfo = await fetchUserInfo(tokens.access_token);
+            
+            // Update account tokens
+            authLogger.debug("Updating account tokens", { email: userInfo.email });
+            await saveAccountTokens(userInfo, tokens);
+            
+            authLogger.info("Permission upgrade successful", { email: userInfo.email });
+            cleanup();
+            callbacks?.onSuccess?.(userInfo);
+            resolve({ success: true, account: userInfo, tokens });
+            return new Response(getSuccessHtml(userInfo.email, "Permissions upgraded!"), {
+              headers: { "Content-Type": "text/html" },
+            });
+          } catch (err) {
+            cleanup();
+            const errorMsg = err instanceof Error ? err.message : "Unknown error during permission upgrade";
+            authLogger.error("Permission upgrade failed", { error: errorMsg });
+            callbacks?.onError?.(errorMsg);
+            resolve({ success: false, error: errorMsg });
+            return new Response(getErrorHtml(errorMsg), {
+              headers: { "Content-Type": "text/html" },
+            });
+          }
+        }
+        
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    
+    callbacks?.onAuthUrl?.(authUrl);
+    
+    try {
+      Bun.spawn(["open", authUrl]);
+    } catch {
+      // User can click the link manually
     }
   });
 }

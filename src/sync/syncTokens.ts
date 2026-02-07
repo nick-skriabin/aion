@@ -27,20 +27,23 @@ export function getSyncTokenKey(accountEmail: string, calendarId: string): strin
 
 /**
  * Load sync tokens from disk
+ * @param forceReload - If true, ignores cache and reads from disk
  */
-async function loadTokens(): Promise<SyncTokenStore> {
-  if (cache) return cache;
+async function loadTokens(forceReload = false): Promise<SyncTokenStore> {
+  if (cache && !forceReload) return cache;
   
   try {
     const file = Bun.file(SYNC_TOKENS_PATH);
     if (await file.exists()) {
       cache = await file.json();
+      appLogger.debug("Loaded sync tokens from disk", { count: Object.keys(cache!.tokens).length });
       return cache!;
     }
   } catch (error) {
     appLogger.warn("Failed to load sync tokens, starting fresh", { error });
   }
   
+  appLogger.debug("No sync tokens file, starting fresh");
   cache = { tokens: {} };
   return cache;
 }

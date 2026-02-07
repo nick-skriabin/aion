@@ -14,8 +14,9 @@ export type KeybindScope = FocusContext | "global";
 export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
   global: [
     { key: "?", display: "?", description: "Show keyboard shortcuts", action: "openHelp", command: "help" },
-    { key: "N", display: "N", description: "Open notifications", action: "openNotifications", command: "notifications" },
+    { key: "shift+n", display: "N", description: "Open notifications", action: "openNotifications", command: "notifications" },
     { key: "ctrl+n", display: "Ctrl+n", description: "Create new event", action: "newEvent", command: "new" },
+    { key: "a", display: "a", description: "Toggle all-day events", action: "toggleAllDay", command: "allday" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },
@@ -25,6 +26,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "", display: "", description: "Logout from Google Calendar", action: "logout", command: "logout" },
     { key: "", display: "", description: "Sync events with Google Calendar", action: "sync", command: "sync" },
     { key: "", display: "", description: "List connected accounts", action: "accounts", command: "accounts" },
+    { key: "", display: "", description: "Upgrade permissions (grant new scopes)", action: "upgrade", command: "upgrade" },
   ],
 
   days: [
@@ -51,6 +53,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "return", display: "Enter", description: "Open event details", action: "openDetails" },
     { key: "space", display: "Space", description: "Open event details", action: "openDetails" },
     { key: "e", display: "e", description: "Edit event", action: "editEvent", command: "edit" },
+    { key: "p", display: "p", description: "Propose new time", action: "proposeNewTime" },
     { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent", command: "delete" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "h", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
@@ -63,6 +66,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "n", display: "n", description: "Decline invitation (No)", action: "declineInvite" },
     { key: "m", display: "m", description: "Maybe / Tentative", action: "tentativeInvite" },
     { key: "e", display: "e", description: "Edit event", action: "editEvent" },
+    { key: "p", display: "p", description: "Propose new time", action: "proposeNewTime" },
     { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent" },
     { key: "o", display: "o", description: "Open meeting link", action: "openMeetingLink" },
     { key: "t", display: "t", description: "Toggle timezone (local/original)", action: "toggleTimezone" },
@@ -144,7 +148,7 @@ export function getKeybindsForHelp(context: FocusContext): { title: string; keyb
 export function getAllCommands(): { name: string; description: string; action: string }[] {
   const commands: { name: string; description: string; action: string }[] = [];
   const seen = new Set<string>();
-  
+
   for (const scope of Object.keys(KEYBIND_REGISTRY) as KeybindScope[]) {
     for (const kb of KEYBIND_REGISTRY[scope]) {
       if (kb.command && !seen.has(kb.command)) {
@@ -157,10 +161,10 @@ export function getAllCommands(): { name: string; description: string; action: s
       }
     }
   }
-  
+
   // Add commands with arguments (special cases)
   commands.push({ name: "new <title>", description: "Create event with title", action: "newEvent" });
-  
+
   return commands.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -168,23 +172,23 @@ export function getAllCommands(): { name: string; description: string; action: s
 export function findCommand(input: string): { name: string; action: string; args?: string } | null {
   const trimmed = input.trim().toLowerCase();
   if (!trimmed) return null;
-  
+
   // Check for exact match first
   const commands = getAllCommands();
   const exact = commands.find((c) => c.name === trimmed);
   if (exact) {
     return { name: exact.name, action: exact.action };
   }
-  
+
   // Check for parameterized commands (e.g., "new my event")
   const parts = trimmed.split(/\s+/);
   const cmdName = parts[0];
   const args = parts.slice(1).join(" ");
-  
+
   const parameterized = commands.find((c) => c.name.startsWith(cmdName + " <") || c.name === cmdName);
   if (parameterized) {
     return { name: parameterized.name, action: parameterized.action, args: args || undefined };
   }
-  
+
   return null;
 }

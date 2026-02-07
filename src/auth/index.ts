@@ -2,7 +2,7 @@
  * Authentication module exports
  */
 
-export { startLoginFlow, logout, logoutAccount, logoutAll, isLoggedIn } from "./oauth.ts";
+export { startLoginFlow, logout, logoutAccount, logoutAll, isLoggedIn, upgradePermissions } from "./oauth.ts";
 export {
   getValidAccessToken,
   getValidAccessTokenForAccount,
