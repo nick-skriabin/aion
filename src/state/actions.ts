@@ -21,6 +21,7 @@ import {
   dayEventsAtom,
   messageAtom,
   messageVisibleAtom,
+  sidebarHeightAtom,
   type FocusContext,
   type Overlay,
   type OverlayKind,
@@ -108,6 +109,12 @@ export const moveDaySelectionAtom = atom(
   (get, set, direction: "up" | "down" | "start" | "end") => {
     const selectedDay = get(selectedDayAtom);
     const anchor = get(viewAnchorDayAtom);
+    const sidebarHeight = get(sidebarHeightAtom);
+    
+    // Calculate visible range bounds (days before/after anchor)
+    const halfDays = Math.floor(sidebarHeight / 2);
+    const daysBefore = halfDays;
+    const daysAfter = sidebarHeight - halfDays - 1;
     
     let newDay: DateTime;
     switch (direction) {
@@ -118,10 +125,12 @@ export const moveDaySelectionAtom = atom(
         newDay = selectedDay.plus({ days: 1 });
         break;
       case "start":
-        newDay = selectedDay.minus({ days: 7 });
+        // Jump by roughly half the visible range
+        newDay = selectedDay.minus({ days: halfDays });
         break;
       case "end":
-        newDay = selectedDay.plus({ days: 7 });
+        // Jump by roughly half the visible range
+        newDay = selectedDay.plus({ days: halfDays });
         break;
       default:
         return;
@@ -129,14 +138,14 @@ export const moveDaySelectionAtom = atom(
     
     set(selectedDayAtom, newDay);
     
-    // Shift anchor if new day is outside visible range (±7 days from anchor)
+    // Shift anchor if new day is outside visible range
     const diffFromAnchor = newDay.diff(anchor, "days").days;
-    if (diffFromAnchor > 6) {
+    if (diffFromAnchor > daysAfter) {
       // Selection went past the end - shift anchor forward
-      set(viewAnchorDayAtom, newDay.minus({ days: 6 }));
-    } else if (diffFromAnchor < -6) {
+      set(viewAnchorDayAtom, newDay.minus({ days: daysAfter }));
+    } else if (diffFromAnchor < -daysBefore) {
       // Selection went past the start - shift anchor backward
-      set(viewAnchorDayAtom, newDay.plus({ days: 6 }));
+      set(viewAnchorDayAtom, newDay.plus({ days: daysBefore }));
     }
   }
 );
@@ -732,6 +741,7 @@ export const loadEventsAtom = atom(null, async (get, set) => {
 export const loginAtom = atom(null, async (get, set) => {
   const { startLoginFlow, getAccounts } = await import("../auth/index.ts");
   const { isLoggedInAtom, isAuthLoadingAtom, accountsAtom } = await import("./atoms.ts");
+  const { startBackgroundSync, isBackgroundSyncRunning } = await import("../sync/backgroundSync.ts");
   
   set(isAuthLoadingAtom, true);
   set(showMessageAtom, { text: "Opening browser for authentication...", type: "progress" });
@@ -760,8 +770,15 @@ export const loginAtom = atom(null, async (get, set) => {
     })));
     set(isLoggedInAtom, accounts.length > 0);
     
-    // Auto-sync after login
-    set(syncAtom);
+    // Auto-sync after login (full sync)
+    await set(syncAtom, { force: true });
+    
+    // Start background sync if not already running
+    if (!isBackgroundSyncRunning()) {
+      startBackgroundSync(async () => {
+        await set(backgroundSyncAtom);
+      });
+    }
   }
 });
 
@@ -771,6 +788,8 @@ export const loginAtom = atom(null, async (get, set) => {
 export const logoutAtom = atom(null, async (get, set, email?: string) => {
   const { logoutAccount, logoutAll, getAccounts, isLoggedIn } = await import("../auth/index.ts");
   const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
+  const { stopBackgroundSync } = await import("../sync/backgroundSync.ts");
+  const { clearAllSyncTokens } = await import("../sync/syncTokens.ts");
   
   if (!(await isLoggedIn())) {
     set(showMessageAtom, { text: "Not logged in", type: "warning" });
@@ -780,10 +799,31 @@ export const logoutAtom = atom(null, async (get, set, email?: string) => {
   if (email) {
     // Logout specific account
     await logoutAccount(email);
+    
+    // Remove events from this account from local database
+    const currentEvents = get(eventsAtom);
+    const remainingEvents: Record<string, GCalEvent> = {};
+    for (const [id, event] of Object.entries(currentEvents)) {
+      if (event.accountEmail !== email) {
+        remainingEvents[id] = event;
+      }
+    }
+    set(eventsAtom, remainingEvents);
+    
+    // Also remove from database
+    await eventsRepo.deleteByAccount(email);
+    
     set(showMessageAtom, { text: `Logged out: ${email}`, type: "info" });
   } else {
     // Logout all accounts
     await logoutAll();
+    // Clear all events from local database
+    await eventsRepo.clear();
+    set(eventsAtom, {});
+    // Clear sync tokens since all accounts are gone
+    await clearAllSyncTokens();
+    // Stop background sync
+    stopBackgroundSync();
     set(showMessageAtom, { text: "Logged out", type: "info" });
   }
   
@@ -795,23 +835,45 @@ export const logoutAtom = atom(null, async (get, set, email?: string) => {
     picture: a.account.picture,
   })));
   set(isLoggedInAtom, accounts.length > 0);
+  
+  // If no accounts left, stop background sync
+  if (accounts.length === 0) {
+    stopBackgroundSync();
+  }
 });
 
 // Sync events with Google Calendar (from all accounts)
-export const syncAtom = atom(null, async (get, set) => {
+// Supports both full sync and incremental sync
+export const syncAtom = atom(null, async (get, set, options?: { force?: boolean; silent?: boolean }) => {
   const { isLoggedIn, getAccounts } = await import("../auth/index.ts");
-  const { isAuthLoadingAtom, accountsAtom } = await import("./atoms.ts");
+  const { isAuthLoadingAtom, accountsAtom, isSyncingAtom } = await import("./atoms.ts");
+  const { getSyncToken, setSyncToken, clearAllSyncTokens } = await import("../sync/syncTokens.ts");
+  const { incrementalSyncAll, fetchAllEvents } = await import("../api/calendar.ts");
+  const { appLogger } = await import("../lib/logger.ts");
   
-  if (!(await isLoggedIn())) {
-    set(showMessageAtom, { text: "Not logged in. Run 'login' first.", type: "warning" });
+  // Prevent concurrent syncs
+  const isSyncing = get(isSyncingAtom);
+  if (isSyncing) {
+    appLogger.debug("Sync already in progress, skipping");
     return;
   }
   
-  set(isAuthLoadingAtom, true);
+  if (!(await isLoggedIn())) {
+    if (!options?.silent) {
+      set(showMessageAtom, { text: "Not logged in. Run 'login' first.", type: "warning" });
+    }
+    return;
+  }
+  
+  set(isSyncingAtom, true);
+  
+  // Only show loading UI for manual syncs (not background)
+  const isBackgroundSync = options?.silent;
+  if (!isBackgroundSync) {
+    set(isAuthLoadingAtom, true);
+  }
   
   try {
-    const { fetchAllEvents } = await import("../api/calendar.ts");
-    
     // Update accounts list
     const accounts = await getAccounts();
     set(accountsAtom, accounts.map((a) => ({
@@ -820,11 +882,94 @@ export const syncAtom = atom(null, async (get, set) => {
       picture: a.account.picture,
     })));
     
-    set(showMessageAtom, { 
-      text: "Syncing...", 
-      type: "progress",
-      progress: { phase: "connecting" }
-    });
+    // Force full sync if requested
+    if (options?.force) {
+      await clearAllSyncTokens();
+    }
+    
+    // Try incremental sync first
+    if (!options?.force) {
+      const incrementalResult = await incrementalSyncAll(getSyncToken);
+      
+      // Check if any calendar needs full sync
+      if (incrementalResult.calendarsRequiringFullSync.length === 0) {
+        // Pure incremental sync - apply changes
+        if (incrementalResult.changed.length > 0 || incrementalResult.deleted.length > 0) {
+          appLogger.info(`Incremental sync: ${incrementalResult.changed.length} changed, ${incrementalResult.deleted.length} deleted`);
+          
+          // Apply changes to local database
+          for (const event of incrementalResult.changed) {
+            const eventWithMeta: GCalEvent = {
+              ...event,
+              createdAt: event.created || new Date().toISOString(),
+              updatedAt: event.updated || new Date().toISOString(),
+            };
+            // Upsert - try update first, create if not exists
+            try {
+              await eventsRepo.update(eventWithMeta);
+            } catch {
+              await eventsRepo.create(eventWithMeta);
+            }
+          }
+          
+          // Delete removed events
+          for (const deletedId of incrementalResult.deleted) {
+            try {
+              await eventsRepo.delete(deletedId);
+            } catch {
+              // Event might not exist locally, that's fine
+            }
+          }
+          
+          // Save new sync tokens
+          for (const [key, token] of incrementalResult.syncTokens) {
+            const [accountEmail, calendarId] = key.split(":");
+            await setSyncToken(accountEmail, calendarId, token);
+          }
+          
+          // Reload events into state
+          const allEvents = await eventsRepo.getAll();
+          const eventsMap: Record<string, GCalEvent> = {};
+          for (const event of allEvents) {
+            eventsMap[event.id] = event;
+          }
+          set(eventsAtom, eventsMap);
+          
+          if (!isBackgroundSync) {
+            set(showMessageAtom, { 
+              text: `Synced: ${incrementalResult.changed.length} updated, ${incrementalResult.deleted.length} removed`, 
+              type: "success",
+              autoDismiss: 3000,
+            });
+          }
+        } else {
+          appLogger.debug("Incremental sync: no changes");
+          // Still update sync tokens
+          for (const [key, token] of incrementalResult.syncTokens) {
+            const [accountEmail, calendarId] = key.split(":");
+            await setSyncToken(accountEmail, calendarId, token);
+          }
+        }
+        
+        set(isSyncingAtom, false);
+        if (!isBackgroundSync) {
+          set(isAuthLoadingAtom, false);
+        }
+        return;
+      }
+      
+      // Some calendars need full sync
+      appLogger.info(`Full sync required for ${incrementalResult.calendarsRequiringFullSync.length} calendars`);
+    }
+    
+    // Full sync
+    if (!isBackgroundSync) {
+      set(showMessageAtom, { 
+        text: "Full sync...", 
+        type: "progress",
+        progress: { phase: "connecting" }
+      });
+    }
     
     // Fetch events for a 2-month window (1 month back, 1 month forward)
     const now = DateTime.now();
@@ -835,30 +980,31 @@ export const syncAtom = atom(null, async (get, set) => {
       throw new Error("Failed to calculate date range");
     }
     
-    set(updateMessageAtom, { 
-      text: "Fetching events...", 
-      progress: { phase: "fetching" }
-    });
+    if (!isBackgroundSync) {
+      set(updateMessageAtom, { 
+        text: "Fetching events...", 
+        progress: { phase: "fetching" }
+      });
+    }
     
-    const fetchedEvents = await fetchAllEvents({
+    const { events: fetchedEvents, syncTokens } = await fetchAllEvents({
       timeMin,
       timeMax,
     });
     
-    set(updateMessageAtom, { 
-      text: "Saving events...", 
-      progress: { current: 0, total: fetchedEvents.length }
-    });
+    if (!isBackgroundSync) {
+      set(updateMessageAtom, { 
+        text: "Saving events...", 
+        progress: { current: 0, total: fetchedEvents.length }
+      });
+    }
     
     // Clear existing events and replace with fetched ones
     await eventsRepo.clear();
     
     // Deduplicate events by ID before saving
-    // (same event can appear in multiple calendars)
     const eventById = new Map<string, GCalEvent>();
     for (const event of fetchedEvents) {
-      // If we already have this event, keep the one from the primary calendar
-      // or just keep the first one we saw
       if (!eventById.has(event.id)) {
         eventById.set(event.id, event);
       }
@@ -868,7 +1014,6 @@ export const syncAtom = atom(null, async (get, set) => {
     let saved = 0;
     
     for (const event of uniqueEvents) {
-      // Add missing required fields
       const eventWithMeta: GCalEvent = {
         ...event,
         createdAt: event.created || new Date().toISOString(),
@@ -877,18 +1022,17 @@ export const syncAtom = atom(null, async (get, set) => {
       await eventsRepo.create(eventWithMeta);
       saved++;
       
-      // Update progress every 10 events
-      if (saved % 10 === 0) {
+      if (!isBackgroundSync && saved % 10 === 0) {
         set(updateMessageAtom, { 
           progress: { current: saved, total: uniqueEvents.length }
         });
       }
     }
     
-    // Log dedup stats
-    const { dbLogger } = await import("../lib/logger.ts");
-    if (fetchedEvents.length !== uniqueEvents.length) {
-      dbLogger.info(`Deduplicated events: ${fetchedEvents.length} -> ${uniqueEvents.length}`);
+    // Save sync tokens for incremental sync
+    for (const [key, token] of syncTokens) {
+      const [accountEmail, calendarId] = key.split(":");
+      await setSyncToken(accountEmail, calendarId, token);
     }
     
     // Update the events atom
@@ -902,26 +1046,39 @@ export const syncAtom = atom(null, async (get, set) => {
     }
     set(eventsAtom, eventsMap);
     
-    // Reset selection to closest event to now
-    const selectedDay = get(selectedDayAtom);
-    set(selectedDayAtom, selectedDay); // Trigger re-render
-    
-    set(showMessageAtom, { 
-      text: `Synced ${uniqueEvents.length} events`, 
-      type: "success" 
-    });
+    if (!isBackgroundSync) {
+      set(showMessageAtom, { 
+        text: `Synced ${uniqueEvents.length} events`, 
+        type: "success" 
+      });
+    } else {
+      appLogger.info(`Full sync complete: ${uniqueEvents.length} events`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    set(showMessageAtom, { text: `Sync failed: ${message}`, type: "error" });
+    if (!isBackgroundSync) {
+      set(showMessageAtom, { text: `Sync failed: ${message}`, type: "error" });
+    } else {
+      appLogger.error("Background sync failed", { error: message });
+    }
   }
   
-  set(isAuthLoadingAtom, false);
+  set(isSyncingAtom, false);
+  if (!isBackgroundSync) {
+    set(isAuthLoadingAtom, false);
+  }
+});
+
+// Background sync action (silent, incremental)
+export const backgroundSyncAtom = atom(null, async (get, set) => {
+  await set(syncAtom, { silent: true });
 });
 
 // Check auth status on startup and load accounts
 export const checkAuthStatusAtom = atom(null, async (get, set) => {
   const { isLoggedIn, getAccounts } = await import("../auth/index.ts");
   const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
+  const { startBackgroundSync, isBackgroundSyncRunning } = await import("../sync/backgroundSync.ts");
   
   const loggedIn = await isLoggedIn();
   set(isLoggedInAtom, loggedIn);
@@ -933,6 +1090,16 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
       name: a.account.name,
       picture: a.account.picture,
     })));
+    
+    // Start background sync if logged in
+    if (!isBackgroundSyncRunning()) {
+      startBackgroundSync(async () => {
+        await set(backgroundSyncAtom);
+      });
+    }
+    
+    // Do an initial sync on startup
+    set(syncAtom, { silent: true });
   }
 });
 

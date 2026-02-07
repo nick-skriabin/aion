@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef } from "react";
-import { Box, Text, ScrollView, FocusScope, useInput } from "@nick-skriabin/glyph";
+import { Box, Text, FocusScope, useInput, useApp } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   dayLayoutAtom,
@@ -467,6 +467,7 @@ function StickyEventHeaders({
 }
 
 export function Timeline() {
+  const { rows: terminalHeight } = useApp();
   const layout = useAtomValue(dayLayoutAtom);
   const selectedDay = useAtomValue(selectedDayAtom);
   const focus = useAtomValue(focusAtom);
@@ -479,21 +480,48 @@ export function Timeline() {
   const nowMinutes = isTodayView ? getNowMinutes() : -1;
   const nowSlot = nowMinutes >= 0 ? minutesToSlot(nowMinutes) : -1;
   
+  // Count lines used by headers
+  const allDayLines = layout.allDayEvents.length > 0 ? layout.allDayEvents.length + 1 : 0; // +1 for padding
+  const stickyEvents = layout.timedEvents.filter((l) => {
+    const startSlot = minutesToSlot(l.startMinutes);
+    return startSlot < 0; // Will be recalculated with actual scrollOffset
+  });
+
+  // Calculate available height for timeline grid
+  // Total height minus: app header (1) + timeline header (1) + all-day events + sticky headers + status bar (1)
+  const headerLines = 3; // app header + timeline header + status bar
+  const availableHeight = Math.max(1, terminalHeight - headerLines - allDayLines);
+
+  const totalSlots = 24 * SLOTS_PER_HOUR;
+
+  // Maximum scroll offset - can't scroll past the end
+  const maxScrollOffset = Math.max(0, totalSlots - availableHeight);
+
   const scrollOffset = useMemo(() => {
+    let offset: number;
+
     if (selectedEventId) {
       const selectedLayout = layout.timedEvents.find(
         (l) => l.event.id === selectedEventId
       );
       if (selectedLayout) {
         const slot = minutesToSlot(selectedLayout.startMinutes);
-        return Math.max(0, slot - 8);
+        // Keep selected event roughly in the middle of the viewport
+        const padding = Math.floor(availableHeight / 3);
+        offset = slot - padding;
+      } else {
+        offset = 7 * SLOTS_PER_HOUR; // Default to 7 AM
       }
+    } else if (isTodayView && nowSlot >= 0) {
+      const padding = Math.floor(availableHeight / 3);
+      offset = nowSlot - padding;
+    } else {
+      offset = 7 * SLOTS_PER_HOUR; // Default to 7 AM
     }
-    if (isTodayView && nowSlot >= 0) {
-      return Math.max(0, nowSlot - 8);
-    }
-    return 7 * SLOTS_PER_HOUR;
-  }, [selectedEventId, layout.timedEvents, isTodayView, nowSlot]);
+
+    // Clamp to valid range [0, maxScrollOffset]
+    return Math.max(0, Math.min(offset, maxScrollOffset));
+  }, [selectedEventId, layout.timedEvents, isTodayView, nowSlot, availableHeight, maxScrollOffset]);
   
   // Auto-select event closest to current time (for today) or first event (for other days)
   useEffect(() => {
@@ -516,8 +544,22 @@ export function Timeline() {
     }
   }, [events, selectedEventId, setSelectedEventId, isTodayView, nowMinutes, layout]);
   
-  const totalSlots = 24 * SLOTS_PER_HOUR;
-  
+  // Calculate visible slot range
+  const visibleSlots = useMemo(() => {
+    const start = Math.max(0, scrollOffset);
+    const end = Math.min(totalSlots, start + availableHeight);
+    return Array.from({ length: end - start }, (_, i) => start + i);
+  }, [scrollOffset, availableHeight, totalSlots]);
+
+  // Recalculate sticky events based on actual scroll offset
+  const actualStickyEvents = useMemo(() => {
+    const visibleStartMinutes = scrollOffset * MINUTES_PER_SLOT;
+    return layout.timedEvents.filter((l) => {
+      const startSlot = minutesToSlot(l.startMinutes);
+      return startSlot < scrollOffset && l.endMinutes > visibleStartMinutes;
+    });
+  }, [layout.timedEvents, scrollOffset]);
+
   return (
     <Box
       style={{
@@ -525,6 +567,7 @@ export function Timeline() {
         height: "100%",
         flexDirection: "column",
         paddingLeft: 1,
+        clip: true,
       }}
     >
       {/* Header */}
@@ -561,9 +604,9 @@ export function Timeline() {
         accountColorMap={accountColorMap}
       />
       
-      {/* Timeline grid */}
-      <ScrollView style={{ flexGrow: 1 }} scrollOffset={scrollOffset}>
-        {Array.from({ length: totalSlots }, (_, i) => i).map((slotIndex) => (
+      {/* Timeline grid - manually sliced for visible range */}
+      <Box style={{ flexGrow: 1, clip: true }}>
+        {visibleSlots.map((slotIndex) => (
           <SlotRow
             key={slotIndex}
             slotIndex={slotIndex}
@@ -574,7 +617,7 @@ export function Timeline() {
             accountColorMap={accountColorMap}
           />
         ))}
-      </ScrollView>
+      </Box>
     </Box>
   );
 }

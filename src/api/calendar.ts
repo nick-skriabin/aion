@@ -183,6 +183,16 @@ interface EventsListResponse {
 }
 
 /**
+ * Result of an incremental sync
+ */
+export interface IncrementalSyncResult {
+  events: GCalEvent[];
+  deleted: string[]; // IDs of deleted/cancelled events
+  nextSyncToken?: string;
+  fullSyncRequired?: boolean; // True if sync token was invalid
+}
+
+/**
  * Convert Google Calendar event to our GCalEvent format
  * The ID is converted to a composite ID (accountEmail:calendarId:googleId) for global uniqueness
  */
@@ -236,7 +246,8 @@ function toGCalEvent(event: GoogleCalendarEvent, accountEmail?: string, calendar
 }
 
 /**
- * Fetch events from a calendar within a date range
+ * Fetch events from a calendar within a date range (full sync)
+ * Returns all events and a syncToken for future incremental syncs
  */
 export async function fetchEvents(options: {
   calendarId?: string;
@@ -244,7 +255,7 @@ export async function fetchEvents(options: {
   timeMax: string; // ISO date string
   maxResults?: number;
   accountEmail?: string;
-}): Promise<GCalEvent[]> {
+}): Promise<{ events: GCalEvent[]; syncToken?: string }> {
   const {
     calendarId = "primary",
     timeMin,
@@ -263,6 +274,7 @@ export async function fetchEvents(options: {
   
   const allEvents: GCalEvent[] = [];
   let pageToken: string | undefined;
+  let syncToken: string | undefined;
   
   do {
     const url = `/calendars/${encodeURIComponent(calendarId)}/events?${params}`;
@@ -278,21 +290,109 @@ export async function fetchEvents(options: {
     
     allEvents.push(...events);
     pageToken = response.nextPageToken;
+    
+    // Capture sync token from last page
+    if (!pageToken && response.nextSyncToken) {
+      syncToken = response.nextSyncToken;
+    }
   } while (pageToken);
   
-  return allEvents;
+  return { events: allEvents, syncToken };
 }
 
 /**
- * Fetch events from all accounts and calendars
+ * Perform incremental sync using a sync token
+ * Returns only changed/deleted events since the token was issued
+ */
+export async function incrementalSync(options: {
+  calendarId?: string;
+  syncToken: string;
+  accountEmail?: string;
+}): Promise<IncrementalSyncResult> {
+  const {
+    calendarId = "primary",
+    syncToken,
+    accountEmail,
+  } = options;
+  
+  const params = new URLSearchParams({
+    syncToken,
+    maxResults: "250",
+  });
+  
+  const changedEvents: GCalEvent[] = [];
+  const deletedIds: string[] = [];
+  let pageToken: string | undefined;
+  let nextSyncToken: string | undefined;
+  
+  try {
+    do {
+      if (pageToken) {
+        params.set("pageToken", pageToken);
+      }
+      
+      const url = `/calendars/${encodeURIComponent(calendarId)}/events?${params}`;
+      const response = await calendarFetch<EventsListResponse>(url, {}, accountEmail);
+      
+      for (const event of response.items || []) {
+        const compositeId = makeCompositeId(accountEmail, event.id, calendarId);
+        
+        if (event.status === "cancelled") {
+          // Event was deleted or cancelled
+          deletedIds.push(compositeId);
+        } else {
+          // Event was added or modified
+          changedEvents.push(toGCalEvent(event, accountEmail, calendarId));
+        }
+      }
+      
+      pageToken = response.nextPageToken;
+      
+      // Capture new sync token from last page
+      if (!pageToken && response.nextSyncToken) {
+        nextSyncToken = response.nextSyncToken;
+      }
+    } while (pageToken);
+    
+    return {
+      events: changedEvents,
+      deleted: deletedIds,
+      nextSyncToken,
+    };
+  } catch (error) {
+    // Check if sync token is invalid (410 Gone)
+    if (error instanceof Error && error.message.includes("410")) {
+      apiLogger.warn(`Sync token invalid for ${calendarId}, full sync required`);
+      return {
+        events: [],
+        deleted: [],
+        fullSyncRequired: true,
+      };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Full sync result with sync tokens for each calendar
+ */
+export interface FullSyncResult {
+  events: GCalEvent[];
+  syncTokens: Map<string, string>; // calendarKey -> syncToken
+}
+
+/**
+ * Fetch events from all accounts and calendars (full sync)
+ * Returns sync tokens for future incremental syncs
  */
 export async function fetchAllEvents(options: {
   timeMin: string;
   timeMax: string;
   maxResults?: number;
-}): Promise<GCalEvent[]> {
+}): Promise<FullSyncResult> {
   const accounts = await getAccounts();
   const allEvents: GCalEvent[] = [];
+  const syncTokens = new Map<string, string>();
   
   for (const account of accounts) {
     try {
@@ -302,7 +402,7 @@ export async function fetchAllEvents(options: {
       // Fetch events from each calendar
       for (const calendar of calendars) {
         try {
-          const events = await fetchEvents({
+          const { events, syncToken } = await fetchEvents({
             calendarId: calendar.id,
             timeMin: options.timeMin,
             timeMax: options.timeMax,
@@ -310,6 +410,13 @@ export async function fetchAllEvents(options: {
             accountEmail: account.account.email,
           });
           allEvents.push(...events);
+          
+          // Store sync token for this calendar
+          if (syncToken) {
+            const key = `${account.account.email}:${calendar.id}`;
+            syncTokens.set(key, syncToken);
+          }
+          
           apiLogger.debug(`Fetched ${events.length} events from ${calendar.summary}`);
         } catch (error) {
           apiLogger.error(`Failed to fetch events for calendar ${calendar.summary}`, error);
@@ -320,7 +427,76 @@ export async function fetchAllEvents(options: {
     }
   }
   
-  return allEvents;
+  return { events: allEvents, syncTokens };
+}
+
+/**
+ * Incremental sync result for all calendars
+ */
+export interface AllCalendarsIncrementalResult {
+  changed: GCalEvent[];
+  deleted: string[];
+  syncTokens: Map<string, string>;
+  calendarsRequiringFullSync: string[]; // Calendar keys that need full sync
+}
+
+/**
+ * Perform incremental sync on all calendars using stored sync tokens
+ */
+export async function incrementalSyncAll(
+  getSyncTokenFn: (accountEmail: string, calendarId: string) => Promise<string | undefined>
+): Promise<AllCalendarsIncrementalResult> {
+  const accounts = await getAccounts();
+  const changed: GCalEvent[] = [];
+  const deleted: string[] = [];
+  const syncTokens = new Map<string, string>();
+  const calendarsRequiringFullSync: string[] = [];
+  
+  for (const account of accounts) {
+    try {
+      const calendars = await getCalendarListForAccount(account.account.email);
+      
+      for (const calendar of calendars) {
+        const calendarKey = `${account.account.email}:${calendar.id}`;
+        const existingToken = await getSyncTokenFn(account.account.email, calendar.id);
+        
+        if (!existingToken) {
+          // No token - calendar needs full sync
+          calendarsRequiringFullSync.push(calendarKey);
+          continue;
+        }
+        
+        try {
+          const result = await incrementalSync({
+            calendarId: calendar.id,
+            syncToken: existingToken,
+            accountEmail: account.account.email,
+          });
+          
+          if (result.fullSyncRequired) {
+            calendarsRequiringFullSync.push(calendarKey);
+            continue;
+          }
+          
+          changed.push(...result.events);
+          deleted.push(...result.deleted);
+          
+          if (result.nextSyncToken) {
+            syncTokens.set(calendarKey, result.nextSyncToken);
+          }
+          
+          apiLogger.debug(`Incremental sync for ${calendar.summary}: ${result.events.length} changed, ${result.deleted.length} deleted`);
+        } catch (error) {
+          apiLogger.error(`Incremental sync failed for ${calendar.summary}`, error);
+          calendarsRequiringFullSync.push(calendarKey);
+        }
+      }
+    } catch (error) {
+      apiLogger.error(`Failed to get calendars for ${account.account.email}`, error);
+    }
+  }
+  
+  return { changed, deleted, syncTokens, calendarsRequiringFullSync };
 }
 
 /**

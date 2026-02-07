@@ -89,7 +89,15 @@ export function NotificationsPanel() {
     });
   }, [invites, tz]);
   
-  const selectedInvite = sortedInvites[selectedIndex];
+  // Clamp selectedIndex to valid range when invites change (e.g., after sync)
+  const clampedIndex = Math.min(selectedIndex, Math.max(0, sortedInvites.length - 1));
+  useEffect(() => {
+    if (clampedIndex !== selectedIndex) {
+      setSelectedIndex(clampedIndex);
+    }
+  }, [clampedIndex, selectedIndex]);
+  
+  const selectedInvite = sortedInvites[clampedIndex];
   
   // Sync selection with timeline when navigating
   useEffect(() => {
@@ -98,7 +106,7 @@ export function NotificationsPanel() {
       selectDay(eventDay);
       setSelectedEventId(selectedInvite.id);
     }
-  }, [selectedInvite, tz, selectDay, setSelectedEventId]);
+  }, [selectedInvite?.id, tz, selectDay, setSelectedEventId]);
   
   // Navigation handlers
   const handleNext = useCallback(() => {
@@ -195,13 +203,13 @@ export function NotificationsPanel() {
         <Box style={{ height: 10, paddingTop: 1 }}>
           <ScrollView
             style={{ height: "100%" }}
-            scrollOffset={Math.max(0, selectedIndex - 2)}
+            scrollOffset={Math.max(0, clampedIndex - 2)}
           >
             {sortedInvites.map((invite, index) => (
               <InviteRow
                 key={invite.id}
                 event={invite}
-                isSelected={index === selectedIndex}
+                isSelected={index === clampedIndex}
                 tz={tz}
               />
             ))}

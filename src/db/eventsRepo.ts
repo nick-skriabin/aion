@@ -207,4 +207,10 @@ export const eventsRepo = {
     const db = getDb();
     await db.delete(events);
   },
+
+  // Delete all events from a specific account
+  async deleteByAccount(accountEmail: string): Promise<void> {
+    const db = getDb();
+    await db.delete(events).where(eq(events.accountEmail, accountEmail));
+  },
 };

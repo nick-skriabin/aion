@@ -11,6 +11,7 @@ export function DayView() {
         flexGrow: 1,
         height: "100%",
         gap: 1,
+        clip: true,
       }}
     >
       <DaysSidebar />

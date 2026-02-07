@@ -88,6 +88,9 @@ export const authStatusAtom = atom<string | null>(null);
 // Whether auth operation is in progress
 export const isAuthLoadingAtom = atom<boolean>(false);
 
+// Whether sync is currently running (prevents concurrent syncs)
+export const isSyncingAtom = atom<boolean>(false);
+
 // ===== Message System (Vim-style) =====
 
 export type MessageType = "info" | "success" | "warning" | "error" | "progress";
@@ -167,10 +170,21 @@ export const dayLayoutAtom = atom((get): DayLayout => {
   return layoutDay(events, day, tz);
 });
 
-// Get days list for sidebar (uses anchor, not selected day)
+// Available height for the days sidebar (set by DaysSidebar component)
+export const sidebarHeightAtom = atom<number>(15); // Default fallback
+
+// Get days list for sidebar (dynamic based on available height)
 export const daysListAtom = atom((get) => {
   const anchor = get(viewAnchorDayAtom);
-  return getDaysRange(anchor, 7, 7); // 7 days before and after
+  const availableHeight = get(sidebarHeightAtom);
+  
+  // Calculate how many days to show based on available height
+  // Each day takes 1 line, we want roughly equal days before and after anchor
+  const halfDays = Math.floor(availableHeight / 2);
+  const daysBefore = halfDays;
+  const daysAfter = availableHeight - halfDays - 1; // -1 for the anchor day itself
+  
+  return getDaysRange(anchor, daysBefore, daysAfter);
 });
 
 // Get selected day index in days list

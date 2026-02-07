@@ -1,10 +1,11 @@
-import React, { useMemo, useRef } from "react";
-import { Box, Text, ScrollView, FocusScope, useInput } from "@nick-skriabin/glyph";
+import React, { useRef, useEffect, useMemo } from "react";
+import { Box, Text, FocusScope, useInput, useApp } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   daysListAtom,
   selectedDayIndexAtom,
   focusAtom,
+  sidebarHeightAtom,
 } from "../state/atoms.ts";
 import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom, newEventAtom } from "../state/actions.ts";
 import { formatDayShort, isToday } from "../domain/time.ts";
@@ -71,11 +72,10 @@ function DaysList() {
   const focus = useAtomValue(focusAtom);
   const isFocused = focus === "days";
   
+  // Days list is already sized to fit available height via sidebarHeightAtom
+  // The anchor shifts as selection moves, keeping selection in view
   return (
-    <ScrollView 
-      style={{ flexGrow: 1 }}
-      scrollOffset={Math.max(0, selectedIndex - 5)}
-    >
+    <Box style={{ flexGrow: 1, clip: true }}>
       {days.map((day, index) => {
         const isCurrentDay = isToday(day);
         const isSelected = index === selectedIndex;
@@ -101,20 +101,32 @@ function DaysList() {
           </Box>
         );
       })}
-    </ScrollView>
+    </Box>
   );
 }
 
 export function DaysSidebar() {
+  const { rows: terminalHeight } = useApp();
   const focus = useAtomValue(focusAtom);
   const isFocused = focus === "days";
-  
+  const setSidebarHeight = useSetAtom(sidebarHeightAtom);
+
+  // Calculate available height for days list
+  // Total height minus: header (1) + app header (1) + status bar (1) + sidebar header (1)
+  const availableHeight = Math.max(1, terminalHeight - 4);
+
+  // Update the sidebar height atom so daysListAtom can use it
+  useEffect(() => {
+    setSidebarHeight(availableHeight);
+  }, [availableHeight, setSidebarHeight]);
+
   return (
     <Box
       style={{
         width: 12,
         height: "100%",
         flexDirection: "column",
+        clip: true,
       }}
     >
       <Text style={{ color: isFocused ? theme.accent.primary : theme.text.dim, bold: isFocused }}>

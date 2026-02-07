@@ -136,7 +136,7 @@ function AppContent() {
       </Box>
       
       {/* Main content */}
-      <Box style={{ flexGrow: 1, flexShrink: 1, paddingX: 1 }}>
+      <Box style={{ flexGrow: 1, flexShrink: 1, paddingX: 1, clip: true }}>
         <DayView />
       </Box>
       
