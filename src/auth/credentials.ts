@@ -3,6 +3,14 @@
  * 
  * Uses PKCE (Proof Key for Code Exchange) for enhanced security.
  * See: https://developers.google.com/identity/protocols/oauth2/native-app
+ * 
+ * Note: Google REQUIRES client_secret even for Desktop apps with PKCE.
+ * For desktop apps, the secret is not truly "secret" (it's embedded in the app),
+ * but Google still requires it. PKCE provides the actual security.
+ * 
+ * Environment variables (to use your own credentials):
+ * - AION_GOOGLE_CLIENT_ID: Your Google Cloud OAuth client ID
+ * - AION_GOOGLE_CLIENT_SECRET: Your Google Cloud OAuth client secret
  */
 
 // Client ID - use env var or default
