@@ -12,6 +12,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { NotificationsPanel } from "./NotificationsPanel.tsx";
 import { GotoDateDialog } from "./GotoDateDialog.tsx";
 import { MeetWithDialog } from "./MeetWithDialog.tsx";
+import { AccountsDialog } from "./AccountsDialog.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
 import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
 import { getDisabledCalendars } from "../config/calendarSettings.ts";
@@ -43,6 +44,8 @@ function OverlayRenderer() {
             return <GotoDateDialog key={`goto-${index}`} />;
           case "meetWith":
             return <MeetWithDialog key={`meetWith-${index}`} />;
+          case "accounts":
+            return <AccountsDialog key={`accounts-${index}`} />;
           // "command" is now handled inline by StatusBar
           default:
             return null;
@@ -96,9 +99,25 @@ function AppContent() {
           height: "100%",
           justifyContent: "center",
           alignItems: "center",
+          flexDirection: "column",
+          gap: 1,
         }}
       >
-        <Spinner label="Loading..." style={{ color: theme.accent.primary }} />
+        <Box style={{ flexDirection: "column", alignItems: "center" }}>
+          <Text style={{ color: theme.accent.primary }}>
+            {" █▀█  █  ▄▀▄  █▄░█"}
+          </Text>
+          <Text style={{ color: theme.accent.primary }}>
+            {" █▄█  █  █ █  █ ▀█"}
+          </Text>
+          <Text style={{ color: theme.text.dim, dim: true }}>
+            {" ▀ ▀  ▀  ▀▄▀  ▀  ▀"}
+          </Text>
+        </Box>
+        <Box style={{ paddingTop: 1 }}>
+          <Spinner label="" style={{ color: theme.accent.primary }} />
+          <Text style={{ color: theme.text.dim }}> Loading...</Text>
+        </Box>
       </Box>
     );
   }

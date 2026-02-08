@@ -16,7 +16,7 @@ export type FocusContext =
   | "notifications";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith" | "accounts";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -90,6 +90,9 @@ export const dialogEventAtom = atom<Partial<GCalEvent> | null>(null);
 
 // Edit mode flag
 export const isEditModeAtom = atom<boolean>(false);
+
+// Flag to add Google Meet to new/edited events
+export const addGoogleMeetAtom = atom<boolean>(false);
 
 // Pending action (for delete/edit with recurrence scope)
 export const pendingActionAtom = atom<EventAction | null>(null);
@@ -358,8 +361,17 @@ export interface TimeSlot {
   duration: number; // in minutes
 }
 
+// Busy period (taken time)
+export interface BusyPeriod {
+  start: DateTime;
+  end: DateTime;
+}
+
 // Fetched available slots
 export const availableSlotsAtom = atom<TimeSlot[]>([]);
+
+// Fetched busy periods (for visualization)
+export const busyPeriodsAtom = atom<BusyPeriod[]>([]);
 
 // Loading state for slots
 export const slotsLoadingAtom = atom<boolean>(false);

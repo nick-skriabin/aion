@@ -5,16 +5,18 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Box, Text, Input, Keybind, Portal } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Keybind, Portal, Spinner } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import {
   meetWithStateAtom,
   availableSlotsAtom,
+  busyPeriodsAtom,
   slotsLoadingAtom,
   deriveContactsAtom,
   type Contact,
   type TimeSlot,
+  type BusyPeriod,
 } from "../state/atoms.ts";
 import { popOverlayAtom, showMessageAtom } from "../state/actions.ts";
 import { theme } from "./theme.ts";
@@ -264,6 +266,7 @@ function SlotsView({
 }) {
   const [meetWithState, setMeetWithState] = useAtom(meetWithStateAtom);
   const slots = useAtomValue(availableSlotsAtom);
+  const busyPeriods = useAtomValue(busyPeriodsAtom);
   const loading = useAtomValue(slotsLoadingAtom);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const prevDurationRef = useRef(meetWithState.duration);
@@ -278,6 +281,51 @@ function SlotsView({
     select: () => { },
     changeDuration: (delta: number) => { },
   });
+
+  // Format duration for display
+  const formatDuration = (mins: number) => {
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    const remaining = mins % 60;
+    return remaining ? `${hours}h ${remaining}m` : `${hours}h`;
+  };
+
+  // Format slot for display (compact)
+  const formatSlot = (slot: TimeSlot) => {
+    return `${slot.start.toFormat("EEE d")} ${slot.start.toFormat("h:mma")}-${slot.end.toFormat("h:mma")}`;
+  };
+
+  // Build interleaved list of slots and blocks
+  type ListItem = { type: "slot"; slot: TimeSlot; slotIndex: number } | { type: "block" };
+
+  const listItems = useMemo((): ListItem[] => {
+    if (slots.length === 0) return [];
+
+    const items: ListItem[] = [];
+
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const prevSlot = i > 0 ? slots[i - 1] : null;
+
+      // Check if there's a gap (busy time) before this slot
+      if (prevSlot) {
+        const gap = slot.start.diff(prevSlot.end, "minutes").minutes;
+        // If gap > 0, there's busy time between slots
+        if (gap > 5) { // Allow small gaps without showing block
+          items.push({ type: "block" });
+        }
+      }
+
+      items.push({ type: "slot", slot, slotIndex: i });
+    }
+
+    return items;
+  }, [slots]);
+
+  // Find the list item index for the currently selected slot
+  const selectedListIndex = useMemo(() => {
+    return listItems.findIndex(item => item.type === "slot" && item.slotIndex === selectedIndex);
+  }, [listItems, selectedIndex]);
 
   handlersRef.current.moveUp = () => {
     setSelectedIndex((i) => Math.max(0, i - 1));
@@ -311,20 +359,81 @@ function SlotsView({
     }
   }, [meetWithState.duration, onRefresh]);
 
-  // Format duration for display
-  const formatDuration = (mins: number) => {
-    if (mins < 60) return `${mins}m`;
-    const hours = Math.floor(mins / 60);
-    const remaining = mins % 60;
-    return remaining ? `${hours}h ${remaining}m` : `${hours}h`;
+  // Generate horizontal timeline bar dynamically centered around available slots
+  // Returns { segments, startHour, endHour } for rendering with labels
+  const renderTimelineBar = (slot: TimeSlot) => {
+    const barWidth = 16;
+    const slotDayStr = slot.start.toFormat("yyyy-MM-dd");
+    const localZone = slot.start.zoneName;
+
+    // Find all slots for this day to determine the time range to show
+    const daySlotsHours = slots
+      .filter(s => s.start.toFormat("yyyy-MM-dd") === slotDayStr)
+      .flatMap(s => [s.start.hour + s.start.minute / 60, s.end.hour + s.end.minute / 60]);
+
+    // Determine display range: 1 hour before earliest slot, 1 hour after latest
+    // Minimum 4 hours range for readability
+    const minSlotHour = Math.min(...daySlotsHours);
+    const maxSlotHour = Math.max(...daySlotsHours);
+    const rangeStart = Math.max(0, Math.floor(minSlotHour) - 1);
+    const rangeEnd = Math.min(24, Math.ceil(maxSlotHour) + 1);
+    const totalHours = Math.max(4, rangeEnd - rangeStart);
+
+    // Get busy periods for this day, converted to local timezone
+    const dayBusy = busyPeriods
+      .map(b => ({
+        start: b.start.setZone(localZone),
+        end: b.end.setZone(localZone),
+      }))
+      .filter(b =>
+        b.start.toFormat("yyyy-MM-dd") === slotDayStr ||
+        b.end.toFormat("yyyy-MM-dd") === slotDayStr
+      );
+
+    const slotStartHour = slot.start.hour + slot.start.minute / 60;
+    const slotEndHour = slot.end.hour + slot.end.minute / 60;
+
+    // Build bar segment by segment (using spaces with bg colors for predictable width)
+    const segments: { type: "free" | "busy" | "selected" }[] = [];
+
+    for (let i = 0; i < barWidth; i++) {
+      const charStartHour = rangeStart + (i / barWidth) * totalHours;
+      const charEndHour = rangeStart + ((i + 1) / barWidth) * totalHours;
+
+      // Check if this char overlaps the selected slot
+      const overlapsSlot = charStartHour < slotEndHour && charEndHour > slotStartHour;
+      if (overlapsSlot) {
+        segments.push({ type: "selected" });
+        continue;
+      }
+
+      // Check if this char overlaps any busy period
+      let isBusy = false;
+      for (const busy of dayBusy) {
+        const busyStartHour = busy.start.hour + busy.start.minute / 60;
+        const busyEndHour = busy.end.hour + busy.end.minute / 60;
+
+        if (charStartHour < busyEndHour && charEndHour > busyStartHour) {
+          isBusy = true;
+          break;
+        }
+      }
+
+      segments.push({ type: isBusy ? "busy" : "free" });
+    }
+
+    return { segments, startHour: rangeStart, endHour: rangeEnd };
   };
 
-  // Format slot for display
-  const formatSlot = (slot: TimeSlot) => {
-    const start = slot.start.toFormat("EEE, MMM d 'at' h:mm a");
-    const end = slot.end.toFormat("h:mm a");
-    return `${start} - ${end}`;
+  // Format hour for display (e.g., 14 -> "2p", 9 -> "9a")
+  const formatHourLabel = (hour: number) => {
+    if (hour === 0 || hour === 24) return "12a";
+    if (hour === 12) return "12p";
+    if (hour < 12) return `${hour}a`;
+    return `${hour - 12}p`;
   };
+
+  const selectedSlot = slots[selectedIndex];
 
   return (
     <Box style={{ flexDirection: "column", flexGrow: 1 }}>
@@ -340,7 +449,7 @@ function SlotsView({
       <Keybind keypress="l" onPress={() => handlersRef.current.changeDuration(1)} />
       <Keybind keypress="b" onPress={onBack} />
 
-      {/* Header with selected people and duration */}
+      {/* Header */}
       <Text style={{ color: theme.text.dim }}>
         With: {meetWithState.selectedPeople.map((p) => p.displayName || p.email.split("@")[0]).join(", ")}
       </Text>
@@ -350,54 +459,114 @@ function SlotsView({
         <Text style={{ color: theme.text.dim }}> (←/→)</Text>
       </Box>
 
-      {/* Slots list - windowed */}
+      {/* Main content: slots list + visualizer */}
       {loading ? (
-        <Text style={{ color: theme.text.dim }}>Loading available slots...</Text>
+        <Box style={{ flexDirection: "row", alignItems: "center", paddingY: 1 }}>
+          <Spinner label="" style={{ color: theme.accent.primary }} />
+          <Text style={{ color: theme.text.dim }}> Checking availability...</Text>
+        </Box>
       ) : slots.length === 0 ? (
         <Text style={{ color: theme.text.dim }}>No available slots found.</Text>
       ) : (
-        (() => {
-          const maxVisible = 6;
-          let startIdx = Math.max(0, selectedIndex - Math.floor(maxVisible / 2));
-          let endIdx = startIdx + maxVisible;
-          
-          if (endIdx > slots.length) {
-            endIdx = slots.length;
-            startIdx = Math.max(0, endIdx - maxVisible);
-          }
-          
-          const visibleSlots = slots.slice(startIdx, endIdx);
-          
-          return (
-            <Box style={{ flexDirection: "column" }}>
-              {startIdx > 0 && (
-                <Text style={{ color: theme.text.dim, dim: true }}>
-                  {" "}↑ {startIdx} more
+        <Box style={{ flexDirection: "row", flexGrow: 1 }}>
+          {/* Left: Slots list with blocks */}
+          <Box style={{ flexDirection: "column", width: 32 }}>
+            {(() => {
+              const maxVisible = 8;
+              // Window around the selected list item
+              let startIdx = Math.max(0, selectedListIndex - Math.floor(maxVisible / 2));
+              let endIdx = startIdx + maxVisible;
+
+              if (endIdx > listItems.length) {
+                endIdx = listItems.length;
+                startIdx = Math.max(0, endIdx - maxVisible);
+              }
+
+              const visibleItems = listItems.slice(startIdx, endIdx);
+
+              return (
+                <>
+                  {startIdx > 0 && (
+                    <Text style={{ color: theme.text.dim, dim: true }}>↑ more</Text>
+                  )}
+                  {visibleItems.map((item, i) => {
+                    if (item.type === "block") {
+                      return (
+                        <Text
+                          key={`block-${startIdx + i}`}
+                          style={{ color: theme.text.dim, dim: true }}
+                        >
+                          {"  "}── unavailable ──
+                        </Text>
+                      );
+                    }
+
+                    const hl = item.slotIndex === selectedIndex;
+                    return (
+                      <Text
+                        key={item.slot.start.toISO()}
+                        style={{
+                          color: hl ? theme.selection.text : theme.text.primary,
+                          bg: hl ? theme.selection.background : undefined,
+                        }}
+                      >
+                        {hl ? "▸" : " "}{formatSlot(item.slot)}
+                      </Text>
+                    );
+                  })}
+                  {endIdx < listItems.length && (
+                    <Text style={{ color: theme.text.dim, dim: true }}>↓ more</Text>
+                  )}
+                </>
+              );
+            })()}
+          </Box>
+
+          {/* Right: Visual summary */}
+          {selectedSlot && (() => {
+            const { segments, startHour, endHour } = renderTimelineBar(selectedSlot);
+            const midHour = Math.round((startHour + endHour) / 2);
+            return (
+              <Box style={{ flexDirection: "column", paddingLeft: 2 }}>
+                <Text style={{ color: theme.accent.primary, bold: true }}>
+                  {selectedSlot.start.toFormat("cccc")}
                 </Text>
-              )}
-              {visibleSlots.map((slot, i) => {
-                const realIndex = startIdx + i;
-                const hl = realIndex === selectedIndex;
-                return (
-                  <Text
-                    key={slot.start.toISO()}
-                    style={{
-                      color: hl ? theme.selection.text : theme.text.primary,
-                      bg: hl ? theme.selection.background : undefined,
-                    }}
-                  >
-                    {hl ? " ▸" : "  "} {formatSlot(slot)}
-                  </Text>
-                );
-              })}
-              {endIdx < slots.length && (
-                <Text style={{ color: theme.text.dim, dim: true }}>
-                  {" "}↓ {slots.length - endIdx} more
+                <Text style={{ color: theme.text.primary }}>
+                  {selectedSlot.start.toFormat("MMMM d, yyyy")}
                 </Text>
-              )}
-            </Box>
-          );
-        })()
+                <Text> </Text>
+                <Box style={{ flexDirection: "row" }}>
+                  <Text style={{ color: theme.text.dim }}>│</Text>
+                  {segments.map((seg, i) => (
+                    <Text
+                      key={i}
+                      style={{
+                        color: seg.type === "selected"
+                          ? theme.accent.primary
+                          : seg.type === "busy"
+                            ? "red"
+                            : theme.text.dim,
+                      }}
+                    >
+                      {seg.type === "selected" ? "#" : seg.type === "busy" ? "x" : "-"}
+                    </Text>
+                  ))}
+                  <Text style={{ color: theme.text.dim }}>│</Text>
+                </Box>
+                <Text style={{ color: theme.text.dim, dim: true }}>
+                  {formatHourLabel(startHour).padEnd(4)}{formatHourLabel(midHour).padStart(6).padEnd(8)}{formatHourLabel(endHour).padStart(4)}
+                </Text>
+                <Text> </Text>
+                <Text style={{ color: theme.accent.primary, bold: true }}>
+                  {selectedSlot.start.toFormat("h:mm a")} - {selectedSlot.end.toFormat("h:mm a")}
+                </Text>
+                <Text style={{ color: theme.text.dim }}>
+                  ({meetWithState.duration} min)
+                </Text>
+              </Box>
+            );
+          })()}
+        </Box>
       )}
 
       {/* Footer */}
@@ -413,6 +582,7 @@ function SlotsView({
 export function MeetWithDialog() {
   const [meetWithState, setMeetWithState] = useAtom(meetWithStateAtom);
   const setSlots = useSetAtom(availableSlotsAtom);
+  const setBusyPeriods = useSetAtom(busyPeriodsAtom);
   const setLoading = useSetAtom(slotsLoadingAtom);
   const popOverlay = useSetAtom(popOverlayAtom);
   const showMessage = useSetAtom(showMessageAtom);
@@ -429,8 +599,9 @@ export function MeetWithDialog() {
       },
     });
     setSlots([]);
+    setBusyPeriods([]);
     popOverlay();
-  }, [setMeetWithState, setSlots, popOverlay]);
+  }, [setMeetWithState, setSlots, setBusyPeriods, popOverlay]);
 
   const handleNextToSlots = useCallback(async () => {
     setMeetWithState((prev) => ({ ...prev, step: "slots" }));
@@ -462,6 +633,12 @@ export function MeetWithDialog() {
 
       // Combine all busy periods
       const allBusy = combineBusyPeriods(busyByPerson);
+
+      // Store busy periods for visualization (convert strings to DateTime)
+      setBusyPeriods(allBusy.map(b => ({
+        start: DateTime.fromISO(b.start),
+        end: DateTime.fromISO(b.end)
+      })));
 
       // Find free slots
       const freeSlots = findFreeSlots(allBusy, rangeStart, rangeEnd, {
@@ -534,7 +711,8 @@ export function MeetWithDialog() {
           attendees,
         },
         "primary",
-        accountEmail
+        accountEmail,
+        true // Always add Google Meet for meetings
       );
 
       showMessage({ text: `Meeting scheduled for ${slot.start.toFormat("EEE, MMM d 'at' h:mm a")}`, type: "success" });
@@ -576,8 +754,8 @@ export function MeetWithDialog() {
       >
         <Box
           style={{
-            width: 55,
-            height: 16,
+            width: 60,
+            height: 17,
             bg: theme.modal.background,
             padding: 1,
             flexDirection: "column",

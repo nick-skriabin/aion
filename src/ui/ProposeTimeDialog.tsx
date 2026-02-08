@@ -175,8 +175,8 @@ export function ProposeTimeDialog() {
   };
   
   const focusedInputStyle = {
-    bg: theme.accent.primary,
-    color: "black" as const,
+    bg: "#3a3a3a",
+    color: "white" as const,
   };
 
   return (

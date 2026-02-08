@@ -17,6 +17,7 @@ import {
   commandSelectedIndexAtom,
   dialogEventAtom,
   isEditModeAtom,
+  addGoogleMeetAtom,
   pendingActionAtom,
   dayLayoutAtom,
   dayEventsAtom,
@@ -76,6 +77,7 @@ export const popOverlayAtom = atom(null, (get, set) => {
   if (top.kind === "dialog") {
     set(dialogEventAtom, null);
     set(isEditModeAtom, false);
+    set(addGoogleMeetAtom, false);
   }
   
   // Clear pending action if closing confirm
@@ -401,6 +403,9 @@ export const performSaveAtom = atom(null, async (get, set) => {
         set(showMessageAtom, { text: "Updating event...", type: "progress" });
         
         const { updateEvent } = await import("../api/calendar.ts");
+        const { addGoogleMeetAtom } = await import("./atoms.ts");
+        const addGoogleMeet = get(addGoogleMeetAtom);
+        
         const updatedEvent = await updateEvent(
           dialogEvent.id,
           {
@@ -415,7 +420,8 @@ export const performSaveAtom = atom(null, async (get, set) => {
           dialogEvent.calendarId || "primary",
           dialogEvent.accountEmail,
           pendingAction?.scope, // Pass the recurrence scope
-          originalEvent // Pass original event for recurring event handling
+          originalEvent, // Pass original event for recurring event handling
+          addGoogleMeet // Add Google Meet link
         );
         event = { ...event, ...updatedEvent, updatedAt: now };
         set(showMessageAtom, { text: "Event updated", type: "success" });
@@ -444,6 +450,8 @@ export const performSaveAtom = atom(null, async (get, set) => {
         
         const { createEvent } = await import("../api/calendar.ts");
         const { getDefaultAccount } = await import("../auth/index.ts");
+        const { addGoogleMeetAtom } = await import("./atoms.ts");
+        const addGoogleMeet = get(addGoogleMeetAtom);
         
         // Use selected account from dialog, or fall back to default account
         let accountEmail = dialogEvent.accountEmail;
@@ -464,7 +472,8 @@ export const performSaveAtom = atom(null, async (get, set) => {
               eventType: dialogEvent.eventType,
             },
             dialogEvent.calendarId || "primary",
-            accountEmail
+            accountEmail,
+            addGoogleMeet // Add Google Meet link
           );
           event = { ...event, ...createdEvent, createdAt: now, updatedAt: now };
           set(showMessageAtom, { text: "Event created", type: "success" });
@@ -1401,23 +1410,7 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
   }
 });
 
-// Show connected accounts in status
+// Open accounts management dialog
 export const showAccountsAtom = atom(null, async (get, set) => {
-  const { getAccounts, getDefaultAccount } = await import("../auth/index.ts");
-  
-  const accounts = await getAccounts();
-  const defaultAccount = await getDefaultAccount();
-  
-  if (accounts.length === 0) {
-    set(showMessageAtom, { text: "No accounts. Run 'login' to add one.", type: "info" });
-    return;
-  }
-  
-  // Show account emails inline
-  const accountList = accounts.map((a) => {
-    const isDefault = a.account.email === defaultAccount?.account.email;
-    return isDefault ? `●${a.account.email}` : a.account.email;
-  }).join(" ");
-  
-  set(showMessageAtom, { text: `Accounts: ${accountList}`, type: "info" });
+  set(pushOverlayAtom, { kind: "accounts" });
 });

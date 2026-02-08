@@ -581,17 +581,37 @@ export async function incrementalSyncAll(
 
 /**
  * Create a new event
+ * @param addGoogleMeet - If true, automatically creates a Google Meet link for the event
  */
 export async function createEvent(
   event: Partial<GCalEvent>,
   calendarId = "primary",
-  accountEmail?: string
+  accountEmail?: string,
+  addGoogleMeet = false
 ): Promise<GCalEvent> {
+  // Build the event body
+  let eventBody: any = { ...event };
+  
+  // Add Google Meet if requested
+  if (addGoogleMeet) {
+    eventBody.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: {
+          type: "hangoutsMeet"
+        }
+      }
+    };
+  }
+  
+  // Add conferenceDataVersion param if we're creating a meet
+  const params = addGoogleMeet ? "?conferenceDataVersion=1" : "";
+  
   const response = await calendarFetch<GoogleCalendarEvent>(
-    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    `/calendars/${encodeURIComponent(calendarId)}/events${params}`,
     {
       method: "POST",
-      body: JSON.stringify(event),
+      body: JSON.stringify(eventBody),
     },
     accountEmail
   );
@@ -612,6 +632,7 @@ export type RecurrenceScope = "this" | "following" | "all";
  * @param accountEmail - Account email for multi-account support
  * @param scope - For recurring events: "this" (just this instance), "all" (all instances), "following" (this and future)
  * @param originalEvent - The original event (needed for "following" scope to get recurringEventId)
+ * @param addGoogleMeet - If true, creates a Google Meet link (if not already present)
  */
 export async function updateEvent(
   eventId: string,
@@ -619,7 +640,8 @@ export async function updateEvent(
   calendarId = "primary",
   accountEmail?: string,
   scope?: RecurrenceScope,
-  originalEvent?: GCalEvent
+  originalEvent?: GCalEvent,
+  addGoogleMeet = false
 ): Promise<GCalEvent> {
   // Extract the Google ID from composite ID for API call
   let googleId = extractGoogleId(eventId);
@@ -632,11 +654,29 @@ export async function updateEvent(
   // For "this" scope, we just update the specific instance (default behavior)
   // For "following" scope, Google doesn't have a direct API - would need to create exception rules
   
+  // Build the event body
+  let eventBody: any = { ...event };
+  
+  // Add Google Meet if requested and not already present
+  if (addGoogleMeet && !originalEvent?.hangoutLink) {
+    eventBody.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: {
+          type: "hangoutsMeet"
+        }
+      }
+    };
+  }
+  
+  // Add conferenceDataVersion param if we're modifying conference data
+  const params = addGoogleMeet ? "?conferenceDataVersion=1" : "";
+  
   const response = await calendarFetch<GoogleCalendarEvent>(
-    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleId)}`,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleId)}${params}`,
     {
       method: "PATCH",
-      body: JSON.stringify(event),
+      body: JSON.stringify(eventBody),
     },
     accountEmail
   );

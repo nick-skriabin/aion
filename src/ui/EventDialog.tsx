@@ -18,6 +18,7 @@ import { DateTime } from "luxon";
 import {
   dialogEventAtom,
   isEditModeAtom,
+  addGoogleMeetAtom,
   timezoneAtom,
   accountsAtom,
   calendarColorMapAtom,
@@ -97,6 +98,7 @@ export function EventDialog() {
   const [location, setLocation] = useState("");
   const [eventType, setEventType] = useState<EventType>("default");
   const [isAllDay, setIsAllDay] = useState(false);
+  const [addGoogleMeet, setAddGoogleMeet] = useAtom(addGoogleMeetAtom);
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -359,8 +361,8 @@ export function EventDialog() {
   };
 
   const focusedInputStyle = {
-    bg: theme.accent.primary,
-    color: "black" as const,
+    bg: "#3a3a3a",
+    color: "white" as const,
   };
 
   return (
@@ -636,6 +638,19 @@ export function EventDialog() {
                     />
                   </Box>
                 </Box>
+
+                {/* Google Meet - only show if event doesn't already have a link */}
+                {!dialogEvent?.hangoutLink && (
+                  <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                    <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}> </Text>
+                    <Checkbox
+                      checked={addGoogleMeet}
+                      onChange={setAddGoogleMeet}
+                      label="Add Google Meet"
+                      focusedStyle={{ color: theme.accent.primary }}
+                    />
+                  </Box>
+                )}
               </Box>
             </ScrollView>
 
