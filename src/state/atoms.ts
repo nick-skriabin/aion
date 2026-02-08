@@ -16,7 +16,7 @@ export type FocusContext =
   | "notifications";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -317,5 +317,92 @@ export const pendingInvitesAtom = atom((get) => {
     if (!event.attendees) return false;
     const selfAttendee = event.attendees.find((a) => a.self);
     return selfAttendee?.responseStatus === "needsAction";
+  });
+});
+
+// ===== Meet With Feature =====
+
+// Contact for people picker
+export interface Contact {
+  email: string;
+  displayName?: string;
+  photoUrl?: string;
+}
+
+// Meet With state
+export interface MeetWithState {
+  step: "people" | "slots";
+  selectedPeople: Contact[];
+  duration: number; // in minutes
+  dateRange: {
+    start: DateTime;
+    end: DateTime;
+  };
+}
+
+// Meet With state atom
+export const meetWithStateAtom = atom<MeetWithState>({
+  step: "people",
+  selectedPeople: [],
+  duration: 30, // default 30 minutes
+  dateRange: {
+    start: DateTime.now().startOf("day"),
+    end: DateTime.now().plus({ days: 7 }).endOf("day"),
+  },
+});
+
+// Available time slot
+export interface TimeSlot {
+  start: DateTime;
+  end: DateTime;
+  duration: number; // in minutes
+}
+
+// Fetched available slots
+export const availableSlotsAtom = atom<TimeSlot[]>([]);
+
+// Loading state for slots
+export const slotsLoadingAtom = atom<boolean>(false);
+
+// Known contacts (extracted from event attendees)
+export const knownContactsAtom = atom<Contact[]>([]);
+
+// Derive known contacts from events
+export const deriveContactsAtom = atom((get) => {
+  const events = get(eventsArrayAtom);
+  const contactMap = new Map<string, Contact>();
+  
+  for (const event of events) {
+    // Add organizer
+    if (event.organizer?.email && !event.organizer.self) {
+      const existing = contactMap.get(event.organizer.email);
+      if (!existing || (!existing.displayName && event.organizer.displayName)) {
+        contactMap.set(event.organizer.email, {
+          email: event.organizer.email,
+          displayName: event.organizer.displayName,
+        });
+      }
+    }
+    
+    // Add attendees
+    if (event.attendees) {
+      for (const attendee of event.attendees) {
+        if (attendee.self) continue; // Skip self
+        const existing = contactMap.get(attendee.email);
+        if (!existing || (!existing.displayName && attendee.displayName)) {
+          contactMap.set(attendee.email, {
+            email: attendee.email,
+            displayName: attendee.displayName,
+          });
+        }
+      }
+    }
+  }
+  
+  // Sort by display name or email
+  return Array.from(contactMap.values()).sort((a, b) => {
+    const nameA = a.displayName || a.email;
+    const nameB = b.displayName || b.email;
+    return nameA.localeCompare(nameB);
   });
 });

@@ -702,3 +702,136 @@ export async function updateAttendance(
   
   return updateEvent(eventId, { attendees: updatedAttendees as any }, calendarId, accountEmail);
 }
+
+// ===== Free/Busy API =====
+
+/**
+ * Busy time period from Free/Busy API
+ */
+export interface BusyPeriod {
+  start: string; // ISO datetime
+  end: string; // ISO datetime
+}
+
+/**
+ * Free/Busy response for a single calendar
+ */
+export interface FreeBusyCalendar {
+  busy: BusyPeriod[];
+  errors?: Array<{ domain: string; reason: string }>;
+}
+
+/**
+ * Full Free/Busy API response
+ */
+interface FreeBusyResponse {
+  kind: "calendar#freeBusy";
+  timeMin: string;
+  timeMax: string;
+  calendars: Record<string, FreeBusyCalendar>;
+}
+
+/**
+ * Query free/busy information for multiple people
+ * 
+ * @param emails - List of email addresses to check
+ * @param timeMin - Start of time range (ISO string)
+ * @param timeMax - End of time range (ISO string)
+ * @param accountEmail - Which account to use for the API call
+ * @returns Map of email -> busy periods
+ */
+export async function queryFreeBusy(
+  emails: string[],
+  timeMin: string,
+  timeMax: string,
+  accountEmail?: string
+): Promise<Map<string, BusyPeriod[]>> {
+  apiLogger.debug("Querying free/busy", { emails, timeMin, timeMax });
+  
+  const response = await calendarFetch<FreeBusyResponse>(
+    "/freeBusy",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        timeMin,
+        timeMax,
+        items: emails.map((email) => ({ id: email })),
+      }),
+    },
+    accountEmail
+  );
+  
+  const result = new Map<string, BusyPeriod[]>();
+  
+  for (const email of emails) {
+    const calendarData = response.calendars[email];
+    if (calendarData) {
+      if (calendarData.errors && calendarData.errors.length > 0) {
+        apiLogger.warn(`Free/busy errors for ${email}`, calendarData.errors);
+        // Still include empty array - means we couldn't get their calendar
+        result.set(email, []);
+      } else {
+        result.set(email, calendarData.busy || []);
+      }
+    } else {
+      result.set(email, []);
+    }
+  }
+  
+  apiLogger.debug("Free/busy results", {
+    emails: emails.length,
+    calendarsWithData: Array.from(result.entries()).filter(([_, busy]) => busy.length > 0).length,
+  });
+  
+  return result;
+}
+
+/**
+ * Query free/busy for the current user (all their calendars)
+ */
+export async function queryMyFreeBusy(
+  timeMin: string,
+  timeMax: string
+): Promise<BusyPeriod[]> {
+  const accounts = await getAccounts();
+  const allBusy: BusyPeriod[] = [];
+  
+  for (const { account } of accounts) {
+    try {
+      const busyMap = await queryFreeBusy([account.email], timeMin, timeMax, account.email);
+      const busy = busyMap.get(account.email) || [];
+      allBusy.push(...busy);
+    } catch (error) {
+      apiLogger.warn(`Failed to get free/busy for ${account.email}`, error);
+    }
+  }
+  
+  // Sort and merge overlapping periods
+  return mergeBusyPeriods(allBusy);
+}
+
+/**
+ * Merge overlapping busy periods
+ */
+function mergeBusyPeriods(periods: BusyPeriod[]): BusyPeriod[] {
+  if (periods.length === 0) return [];
+  
+  // Sort by start time
+  const sorted = [...periods].sort((a, b) => a.start.localeCompare(b.start));
+  
+  const merged: BusyPeriod[] = [sorted[0]];
+  
+  for (let i = 1; i < sorted.length; i++) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+    
+    // If current overlaps or is adjacent to last, merge them
+    if (current.start <= last.end) {
+      last.end = current.end > last.end ? current.end : last.end;
+    } else {
+      merged.push(current);
+    }
+  }
+  
+  return merged;
+}

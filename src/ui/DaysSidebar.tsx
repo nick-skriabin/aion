@@ -7,7 +7,7 @@ import {
   focusAtom,
   sidebarHeightAtom,
 } from "../state/atoms.ts";
-import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom, newEventAtom, toggleAllDayExpandedAtom, toggleCalendarSidebarAtom, openGotoDialogAtom } from "../state/actions.ts";
+import { toggleFocusAtom, confirmDaySelectionAtom, moveDaySelectionAtom, openNotificationsAtom, newEventAtom, toggleAllDayExpandedAtom, toggleCalendarSidebarAtom, openGotoDialogAtom, openMeetWithDialogAtom } from "../state/actions.ts";
 import { formatDayShort, isToday } from "../domain/time.ts";
 import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
 import { theme } from "./theme.ts";
@@ -21,6 +21,7 @@ function DaysKeybinds() {
   const toggleAllDayExpanded = useSetAtom(toggleAllDayExpandedAtom);
   const toggleCalendarSidebar = useSetAtom(toggleCalendarSidebarAtom);
   const openGotoDialog = useSetAtom(openGotoDialogAtom);
+  const openMeetWithDialog = useSetAtom(openMeetWithDialogAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -41,7 +42,8 @@ function DaysKeybinds() {
     toggleAllDay: () => toggleAllDayExpanded(),
     toggleCalendars: () => toggleCalendarSidebar(),
     openGoto: () => openGotoDialog(),
-  }), [openNotifications, newEvent, toggleAllDayExpanded, toggleCalendarSidebar, openGotoDialog]);
+    openMeetWith: () => openMeetWithDialog(),
+  }), [openNotifications, newEvent, toggleAllDayExpanded, toggleCalendarSidebar, openGotoDialog, openMeetWithDialog]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)

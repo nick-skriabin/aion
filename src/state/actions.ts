@@ -828,6 +828,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
         set(openGotoDialogAtom);
       }
       break;
+    case "openMeetWith":
+      set(openMeetWithDialogAtom);
+      break;
     case "upgrade":
       set(upgradePermissionsAtom);
       break;
@@ -850,6 +853,11 @@ export const openNotificationsAtom = atom(null, (get, set) => {
 // Open goto date dialog (for Ctrl+G global keybind)
 export const openGotoDialogAtom = atom(null, (get, set) => {
   set(pushOverlayAtom, { kind: "goto" });
+});
+
+// Open meet with dialog (for Ctrl+M global keybind)
+export const openMeetWithDialogAtom = atom(null, (get, set) => {
+  set(pushOverlayAtom, { kind: "meetWith" });
 });
 
 // Go to a specific date directly (for :goto <date> command)

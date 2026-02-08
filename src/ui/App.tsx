@@ -11,6 +11,7 @@ import { HelpDialog } from "./HelpDialog.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { NotificationsPanel } from "./NotificationsPanel.tsx";
 import { GotoDateDialog } from "./GotoDateDialog.tsx";
+import { MeetWithDialog } from "./MeetWithDialog.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
 import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
 import { getDisabledCalendars } from "../config/calendarSettings.ts";
@@ -40,6 +41,8 @@ function OverlayRenderer() {
             return <NotificationsPanel key={`notifications-${index}`} />;
           case "goto":
             return <GotoDateDialog key={`goto-${index}`} />;
+          case "meetWith":
+            return <MeetWithDialog key={`meetWith-${index}`} />;
           // "command" is now handled inline by StatusBar
           default:
             return null;

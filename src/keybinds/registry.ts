@@ -19,6 +19,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "a", display: "a", description: "Toggle all-day events", action: "toggleAllDay", command: "allday" },
     { key: "shift+c", display: "C", description: "Toggle calendars sidebar", action: "toggleCalendars", command: "calendars" },
     { key: "ctrl+g", display: "Ctrl+g", description: "Go to date", action: "openGoto", command: "goto" },
+    { key: "ctrl+m", display: "Ctrl+m", description: "Meet with...", action: "openMeetWith", command: "meet" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },

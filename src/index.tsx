@@ -1,6 +1,11 @@
 import React from "react";
 import { render } from "@nick-skriabin/glyph";
 import { App } from "./ui/App.tsx";
+import { ErrorBoundary } from "./ui/ErrorBoundary.tsx";
 
 // Start the app
-render(<App />);
+render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
