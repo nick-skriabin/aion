@@ -25,6 +25,7 @@ import {
   newEventAtom,
   toggleAllDayExpandedAtom,
   toggleCalendarSidebarAtom,
+  openGotoDialogAtom,
 } from "../state/actions.ts";
 import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart, getEventEnd, getLocalTimezone } from "../domain/time.ts";
 import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
@@ -132,6 +133,7 @@ function TimelineKeybinds() {
   const newEvent = useSetAtom(newEventAtom);
   const toggleAllDayExpanded = useSetAtom(toggleAllDayExpandedAtom);
   const toggleCalendarSidebar = useSetAtom(toggleCalendarSidebarAtom);
+  const openGotoDialog = useSetAtom(openGotoDialogAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -156,7 +158,8 @@ function TimelineKeybinds() {
     newEvent: () => newEvent(),
     toggleAllDay: () => toggleAllDayExpanded(),
     toggleCalendars: () => toggleCalendarSidebar(),
-  }), [openNotifications, newEvent, toggleAllDayExpanded, toggleCalendarSidebar]);
+    openGoto: () => openGotoDialog(),
+  }), [openNotifications, newEvent, toggleAllDayExpanded, toggleCalendarSidebar, openGotoDialog]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)

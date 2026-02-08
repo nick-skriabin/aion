@@ -817,6 +817,17 @@ export const executeCommandAtom = atom(null, (get, set) => {
     case "toggleCalendars":
       set(toggleCalendarSidebarAtom);
       break;
+    case "openGoto":
+      set(openGotoDialogAtom);
+      break;
+    case "gotoDate":
+      if (cmd.args) {
+        set(gotoDateAtom, cmd.args);
+      } else {
+        // No args, open the dialog instead
+        set(openGotoDialogAtom);
+      }
+      break;
     case "upgrade":
       set(upgradePermissionsAtom);
       break;
@@ -834,6 +845,39 @@ export const openHelpAtom = atom(null, (get, set) => {
 // Open notifications panel
 export const openNotificationsAtom = atom(null, (get, set) => {
   set(pushOverlayAtom, { kind: "notifications" });
+});
+
+// Open goto date dialog (for Ctrl+G global keybind)
+export const openGotoDialogAtom = atom(null, (get, set) => {
+  set(pushOverlayAtom, { kind: "goto" });
+});
+
+// Go to a specific date directly (for :goto <date> command)
+export const gotoDateAtom = atom(null, async (get, set, dateString: string) => {
+  const { parseNaturalDate } = await import("../domain/naturalDate.ts");
+  const { DateTime } = await import("luxon");
+  
+  const parsed = parseNaturalDate(dateString);
+  
+  if (parsed && parsed.date.isValid) {
+    const targetDay = parsed.date.startOf("day");
+    set(selectedDayAtom, targetDay);
+    set(viewAnchorDayAtom, targetDay);
+    set(focusAtom, "timeline");
+    set(showMessageAtom, `Jumped to ${targetDay.toFormat("EEEE, MMMM d, yyyy")}`);
+  } else {
+    // Try direct ISO date
+    const iso = DateTime.fromISO(dateString);
+    if (iso.isValid) {
+      const targetDay = iso.startOf("day");
+      set(selectedDayAtom, targetDay);
+      set(viewAnchorDayAtom, targetDay);
+      set(focusAtom, "timeline");
+      set(showMessageAtom, `Jumped to ${targetDay.toFormat("EEEE, MMMM d, yyyy")}`);
+    } else {
+      set(showMessageAtom, `Could not parse date: ${dateString}`);
+    }
+  }
 });
 
 // Create new event (for Ctrl+N global keybind)

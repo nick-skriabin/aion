@@ -18,6 +18,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "ctrl+n", display: "Ctrl+n", description: "Create new event", action: "newEvent", command: "new" },
     { key: "a", display: "a", description: "Toggle all-day events", action: "toggleAllDay", command: "allday" },
     { key: "shift+c", display: "C", description: "Toggle calendars sidebar", action: "toggleCalendars", command: "calendars" },
+    { key: "ctrl+g", display: "Ctrl+g", description: "Go to date", action: "openGoto", command: "goto" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },
@@ -178,6 +179,7 @@ export function getAllCommands(): { name: string; description: string; action: s
 
   // Add commands with arguments (special cases)
   commands.push({ name: "new <title>", description: "Create event with title", action: "newEvent" });
+  commands.push({ name: "goto <date>", description: "Go to date (e.g., 'goto tomorrow')", action: "gotoDate" });
 
   return commands.sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -16,7 +16,7 @@ export type FocusContext =
   | "notifications";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto";
 
 export interface Overlay {
   kind: OverlayKind;

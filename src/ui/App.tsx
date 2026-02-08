@@ -10,6 +10,7 @@ import { KeyboardHandler } from "./KeyboardHandler.tsx";
 import { HelpDialog } from "./HelpDialog.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { NotificationsPanel } from "./NotificationsPanel.tsx";
+import { GotoDateDialog } from "./GotoDateDialog.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
 import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
 import { getDisabledCalendars } from "../config/calendarSettings.ts";
@@ -37,6 +38,8 @@ function OverlayRenderer() {
             return <HelpDialog key={`help-${index}`} />;
           case "notifications":
             return <NotificationsPanel key={`notifications-${index}`} />;
+          case "goto":
+            return <GotoDateDialog key={`goto-${index}`} />;
           // "command" is now handled inline by StatusBar
           default:
             return null;
@@ -134,7 +137,7 @@ function AppContent() {
           )}
         </Box>
         <Text style={{ color: theme.text.dim }}>
-          C:calendars  ?:help  q:quit
+          C-g:goto  C:calendars  ?:help
         </Text>
       </Box>
       
