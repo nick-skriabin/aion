@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="Aion" width="400">
+  <img src="images/logo.png" alt="Aion" width="300">
 </p>
 
 <h1 align="center">Aion</h1>
