@@ -1,9 +1,5 @@
 <p align="center">
-  <pre>
- █▀█  █  ▄▀▄  █▄░█
- █▄█  █  █ █  █ ▀█
- ▀ ▀  ▀  ▀▄▀  ▀  ▀
-  </pre>
+  <img src="images/logo.png" alt="Aion" width="400">
 </p>
 
 <h1 align="center">Aion</h1>

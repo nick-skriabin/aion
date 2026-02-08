@@ -17,6 +17,7 @@
     "luxon": "^3.5.0",
     "react": "^19.0.0",
     "react-error-boundary": "^6.1.0",
+    "rrule": "^2.8.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
