@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="https://em-content.zobj.net/source/apple/391/calendar_1f4c5.png" width="120" height="120" alt="Aion">
+  <pre>
+ █▀█  █  ▄▀▄  █▄░█
+ █▄█  █  █ █  █ ▀█
+ ▀ ▀  ▀  ▀▄▀  ▀  ▀
+  </pre>
 </p>
 
 <h1 align="center">Aion</h1>
@@ -54,10 +58,16 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 |---------|-------------|
 | **⌨️ Vim Keybindings** | Navigate with `j`/`k`, `gg`/`G`, `h`/`l` — feels like home |
 | **📅 Visual Timeline** | Day view with 15-minute precision and overlap handling |
+| **🔗 Google Calendar Sync** | Multi-account OAuth with PKCE, background sync every 30s |
+| **👥 Meet With** | Find free slots across multiple people's calendars |
+| **📹 Google Meet** | Auto-generate Meet links when creating events |
+| **📁 Multi-Calendar** | Toggle calendars on/off, each with its own color |
+| **🌍 Timezone Support** | Events display in local time, toggle to see original timezone |
 | **🎨 Themeable** | Customize every color via TOML configuration |
-| **💾 Local-First** | SQLite database, no cloud required, your data stays yours |
+| **💾 Local-First** | SQLite database, your data stays yours |
 | **🔔 Notifications** | Track pending invites at a glance |
 | **📝 Command Palette** | Quick access to all actions with fuzzy search |
+| **🗓️ Natural Language Dates** | Type "tomorrow 3pm" or "next friday for 2 hours" |
 | **❓ Context Help** | Press `?` anywhere to see available keybindings |
 | **🚀 Fast** | Built with Bun and React — instant startup |
 
@@ -79,7 +89,15 @@ bun install
 bun dev
 ```
 
-### 3. Navigate
+### 3. Connect Google Calendar
+
+```
+:login
+```
+
+Follow the OAuth flow in your browser. Aion supports multiple Google accounts.
+
+### 4. Navigate
 
 Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view details.
 
@@ -98,6 +116,7 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 | `gg` | Jump to first item |
 | `G` | Jump to last item |
 | `n` | Jump to now (timeline only) |
+| `Ctrl+G` | Go to date (natural language) |
 
 ### Events
 
@@ -107,6 +126,7 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 | `e` | Edit event |
 | `D` | Delete event |
 | `Ctrl+N` | Create new event |
+| `Ctrl+M` | Meet with... (find free slots) |
 
 ### Event Details
 
@@ -115,9 +135,17 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 | `y` | Accept invitation |
 | `n` | Decline invitation |
 | `m` | Maybe / Tentative |
-| `o` | Open meeting link |
+| `o` | Open meeting link (Meet, Zoom, Teams, etc.) |
 | `e` | Edit event |
 | `D` | Delete event |
+| `t` | Toggle timezone (local ↔ original) |
+
+### Calendars & Accounts
+
+| Key | Action |
+|-----|--------|
+| `Shift+C` | Toggle calendars sidebar |
+| `A` | Toggle all-day events section |
 
 ### General
 
@@ -135,18 +163,63 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 
 Open the command palette with `:` and type a command:
 
+### Event Management
+
 | Command | Action |
 |---------|--------|
 | `new` | Create new event |
 | `new <title>` | Create event with title |
 | `edit` | Edit selected event |
 | `delete` | Delete selected event |
+
+### Navigation
+
+| Command | Action |
+|---------|--------|
+| `goto <date>` | Jump to date (e.g., `goto tomorrow`, `goto march 15`) |
+| `now` | Jump to current time |
+| `today` | Jump to today |
+
+### Google Calendar
+
+| Command | Action |
+|---------|--------|
+| `login` | Add Google account |
+| `logout` | Remove all accounts |
+| `sync` | Force sync with Google Calendar |
+| `accounts` | Manage connected accounts |
+| `calendars` | Toggle calendars sidebar |
+
+### Scheduling
+
+| Command | Action |
+|---------|--------|
+| `meet` | Find free slots with other people |
+
+### General
+
+| Command | Action |
+|---------|--------|
 | `help` | Show keybindings |
 | `notifications` | Open notifications panel |
-| `now` | Jump to current time |
 | `quit` | Exit application |
 
 Navigate with `↑`/`↓` or `Ctrl+P`/`Ctrl+N`, select with `Enter`.
+
+---
+
+## Natural Language Dates
+
+When creating or editing events, you can use natural language for dates and times:
+
+| Input | Result |
+|-------|--------|
+| `tomorrow 3pm` | Tomorrow at 3:00 PM |
+| `next friday at 10am` | Next Friday at 10:00 AM |
+| `in 2 hours` | 2 hours from now |
+| `today at 5pm for 30 minutes` | Today 5:00-5:30 PM |
+| `from march 5 for 2 weeks` | All-day event, March 5-19 |
+| `between march 6 and 12` | All-day event, March 6-12 |
 
 ---
 
@@ -212,6 +285,10 @@ All data is stored locally in `~/.aion/`:
 |------|-------------|
 | `aion.db` | SQLite database with all events |
 | `config.toml` | User configuration (theme, etc.) |
+| `tokens.json` | OAuth tokens (encrypted) |
+| `calendar-settings.json` | Calendar visibility preferences |
+| `account-settings.json` | Custom account names |
+| `logs/` | Application logs (daily rotation) |
 
 ---
 
@@ -224,19 +301,39 @@ All data is stored locally in `~/.aion/`:
 | **State Management** | [Jotai](https://jotai.org) |
 | **Database** | SQLite via [Drizzle ORM](https://orm.drizzle.team) |
 | **Date/Time** | [Luxon](https://moment.github.io/luxon) |
+| **NLP Dates** | [chrono-node](https://github.com/wanasit/chrono) |
 | **Validation** | [Zod](https://zod.dev) |
 
 ---
 
 ## Roadmap
 
-- [ ] Google Calendar sync (OAuth)
+### ✅ Completed
+
+- [x] Google Calendar sync (OAuth with PKCE)
+- [x] Multi-account support
+- [x] Multiple calendars per account
+- [x] Calendar toggle sidebar
+- [x] Meet With (free/busy scheduling)
+- [x] Google Meet link generation
+- [x] Natural language date input
+- [x] Timezone handling
+- [x] Background sync (30s interval)
+- [x] Accounts management dialog
+
+### 🚧 In Progress
+
 - [ ] Week view
 - [ ] Month view
-- [ ] Recurring event expansion
-- [ ] Multiple calendars
+
+### 📋 Planned
+
+- [ ] Recurring event creation/editing
 - [ ] Search / filtering
 - [ ] Import/export (ICS)
+- [ ] CalDAV support
+- [ ] Offline mode improvements
+- [ ] Custom notifications/reminders
 
 ---
 
