@@ -26,6 +26,7 @@ import {
   allDayExpandedAtom,
   timezoneAtom,
   calendarsAtom,
+  calendarSidebarVisibleAtom,
   type FocusContext,
   type Overlay,
   type OverlayKind,
@@ -242,6 +243,20 @@ export const scrollTimelineAtom = atom(
 export const toggleAllDayExpandedAtom = atom(null, (get, set) => {
   const current = get(allDayExpandedAtom);
   set(allDayExpandedAtom, !current);
+});
+
+// Toggle calendar sidebar visibility
+export const toggleCalendarSidebarAtom = atom(null, (get, set) => {
+  const current = get(calendarSidebarVisibleAtom);
+  set(calendarSidebarVisibleAtom, !current);
+  
+  // If opening the sidebar, focus it
+  if (!current) {
+    set(focusAtom, "calendars");
+  } else {
+    // If closing, return focus to days
+    set(focusAtom, "days");
+  }
 });
 
 // ===== Event Actions =====
@@ -798,6 +813,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
       break;
     case "toggleAllDay":
       set(toggleAllDayExpandedAtom);
+      break;
+    case "toggleCalendars":
+      set(toggleCalendarSidebarAtom);
       break;
     case "upgrade":
       set(upgradePermissionsAtom);

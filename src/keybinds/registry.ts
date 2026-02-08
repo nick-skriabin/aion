@@ -17,6 +17,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "shift+n", display: "N", description: "Open notifications", action: "openNotifications", command: "notifications" },
     { key: "ctrl+n", display: "Ctrl+n", description: "Create new event", action: "newEvent", command: "new" },
     { key: "a", display: "a", description: "Toggle all-day events", action: "toggleAllDay", command: "allday" },
+    { key: "shift+c", display: "C", description: "Toggle calendars sidebar", action: "toggleCalendars", command: "calendars" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
     { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },
@@ -27,6 +28,17 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "", display: "", description: "Sync events with Google Calendar", action: "sync", command: "sync" },
     { key: "", display: "", description: "List connected accounts", action: "accounts", command: "accounts" },
     { key: "", display: "", description: "Upgrade permissions (grant new scopes)", action: "upgrade", command: "upgrade" },
+  ],
+
+  calendars: [
+    { key: "j", display: "j / ↓", description: "Next calendar", action: "nextCalendar" },
+    { key: "down", display: "j / ↓", description: "Next calendar", action: "nextCalendar" },
+    { key: "k", display: "k / ↑", description: "Previous calendar", action: "prevCalendar" },
+    { key: "up", display: "k / ↑", description: "Previous calendar", action: "prevCalendar" },
+    { key: "space", display: "Space", description: "Toggle calendar visibility", action: "toggleCalendar" },
+    { key: "return", display: "Enter", description: "Toggle calendar visibility", action: "toggleCalendar" },
+    { key: "tab", display: "Tab", description: "Move to days list", action: "focusDays" },
+    { key: "l", display: "l", description: "Move to days list", action: "focusDays" },
   ],
 
   days: [
@@ -118,12 +130,14 @@ export function getKeybindsForHelp(context: FocusContext): { title: string; keyb
   const sections: { title: string; keybinds: KeybindDef[] }[] = [];
 
   const scopeTitle: Record<FocusContext, string> = {
+    calendars: "Calendars Sidebar",
     days: "Days Sidebar",
     timeline: "Timeline",
     details: "Event Details",
     dialog: "Dialog",
     command: "Command Bar",
     confirm: "Confirm Dialog",
+    notifications: "Notifications",
   };
 
   // Add context-specific keybinds

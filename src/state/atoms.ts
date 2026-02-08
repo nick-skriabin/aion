@@ -6,6 +6,7 @@ import { getDaysRange, getLocalTimezone } from "../domain/time.ts";
 
 // ===== Focus Context =====
 export type FocusContext =
+  | "calendars"
   | "days"
   | "timeline"
   | "details"
@@ -56,6 +57,21 @@ export const timelineScrollAtom = atom<number>(8); // Default to 8 AM
 
 // Whether all-day events section is expanded (shows all events vs collapsed summary)
 export const allDayExpandedAtom = atom<boolean>(false);
+
+// ===== Calendar Sidebar =====
+
+// Whether the calendar sidebar is visible
+export const calendarSidebarVisibleAtom = atom<boolean>(false);
+
+// Set of enabled calendar IDs (format: "accountEmail:calendarId")
+// Empty set means all calendars are enabled (default behavior)
+export const enabledCalendarsAtom = atom<Set<string>>(new Set());
+
+// Whether we've loaded the initial enabled calendars from disk
+export const enabledCalendarsLoadedAtom = atom<boolean>(false);
+
+// Selected index in the calendar sidebar for navigation
+export const selectedCalendarIndexAtom = atom<number>(0);
 
 // Overlay stack
 export const overlayStackAtom = atom<Overlay[]>([]);
@@ -204,15 +220,32 @@ export const selectedEventAtom = atom((get) => {
   return id ? events[id] || null : null;
 });
 
-// Get events as array sorted by start time
+// Get events as array sorted by start time (unfiltered)
 export const eventsArrayAtom = atom((get) => {
   const events = get(eventsAtom);
   return Object.values(events);
 });
 
+// Get events filtered by enabled calendars
+export const filteredEventsArrayAtom = atom((get) => {
+  const events = get(eventsArrayAtom);
+  const disabledCalendars = get(enabledCalendarsAtom);
+  
+  // If no calendars are disabled, return all events
+  if (disabledCalendars.size === 0) {
+    return events;
+  }
+  
+  // Filter out events from disabled calendars
+  return events.filter((event) => {
+    const calendarKey = `${event.accountEmail}:${event.calendarId}`;
+    return !disabledCalendars.has(calendarKey);
+  });
+});
+
 // Get events for the selected day
 export const dayEventsAtom = atom((get) => {
-  const events = get(eventsArrayAtom);
+  const events = get(filteredEventsArrayAtom);
   const day = get(selectedDayAtom);
   const tz = get(timezoneAtom);
   const layout = layoutDay(events, day, tz);
@@ -221,7 +254,7 @@ export const dayEventsAtom = atom((get) => {
 
 // Get layout for the selected day
 export const dayLayoutAtom = atom((get): DayLayout => {
-  const events = get(eventsArrayAtom);
+  const events = get(filteredEventsArrayAtom);
   const day = get(selectedDayAtom);
   const tz = get(timezoneAtom);
   return layoutDay(events, day, tz);
@@ -279,7 +312,7 @@ export const hasOtherAttendeesAtom = atom((get) => {
 
 // Get all pending invites (events needing action)
 export const pendingInvitesAtom = atom((get) => {
-  const events = get(eventsArrayAtom);
+  const events = get(filteredEventsArrayAtom);
   return events.filter((event) => {
     if (!event.attendees) return false;
     const selfAttendee = event.attendees.find((a) => a.self);

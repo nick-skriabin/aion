@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect, useRef } from "react";
 import { Box, Text, FocusScope, useInput, useApp } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { DateTime } from "luxon";
 import {
   dayLayoutAtom,
   selectedDayAtom,
@@ -23,8 +24,9 @@ import {
   openNotificationsAtom,
   newEventAtom,
   toggleAllDayExpandedAtom,
+  toggleCalendarSidebarAtom,
 } from "../state/actions.ts";
-import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart } from "../domain/time.ts";
+import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart, getEventEnd, getLocalTimezone } from "../domain/time.ts";
 import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
 import { findNearestEvent } from "../domain/layout.ts";
 import { handleKeyEvent } from "../keybinds/useKeybinds.tsx";
@@ -78,6 +80,14 @@ const MINUTES_PER_SLOT = 15;
 const COLUMN_WIDTH = 28;
 
 /**
+ * Check if an event has ended (is in the past)
+ */
+function isEventPast(event: GCalEvent, tz: string): boolean {
+  const end = getEventEnd(event, tz);
+  return end < DateTime.now();
+}
+
+/**
  * Get color for an event based on its calendar
  * Falls back to event type color if no calendar color
  */
@@ -121,6 +131,7 @@ function TimelineKeybinds() {
   const openNotifications = useSetAtom(openNotificationsAtom);
   const newEvent = useSetAtom(newEventAtom);
   const toggleAllDayExpanded = useSetAtom(toggleAllDayExpandedAtom);
+  const toggleCalendarSidebar = useSetAtom(toggleCalendarSidebarAtom);
   
   const lastKeyRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -144,7 +155,8 @@ function TimelineKeybinds() {
     openNotifications: () => openNotifications(),
     newEvent: () => newEvent(),
     toggleAllDay: () => toggleAllDayExpanded(),
-  }), [openNotifications, newEvent, toggleAllDayExpanded]);
+    toggleCalendars: () => toggleCalendarSidebar(),
+  }), [openNotifications, newEvent, toggleAllDayExpanded, toggleCalendarSidebar]);
   
   useInput((key) => {
     // Handle global keybinds first (FocusScope trap would otherwise block them)
@@ -232,9 +244,11 @@ function EventColumn({
   const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
   const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
   const isDeclined = responseStatus === "declined";
+  const isPast = isEventPast(event, getLocalTimezone());
+  const shouldDim = isDeclined || isPast;
   
   const bgColor = isHighlighted ? theme.selection.background : undefined;
-  const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
+  const textColor = isHighlighted ? theme.selection.text : (shouldDim ? theme.text.dim : eventColor);
   
   if (isStart) {
     const start = getEventStart(event);
@@ -247,16 +261,14 @@ function EventColumn({
     
     return (
       <Box style={{ width, flexDirection: "row", bg: bgColor }}>
-        <Text style={{ color: textColor, bold: isHighlighted }}>
-          {isHighlighted ? "▸" : "○"}
-        </Text>
-        <Text style={{ color: isHighlighted ? theme.selection.text : theme.text.dim }}> {timeStr} </Text>
+        <Text style={{ color: eventColor, dim: shouldDim }}>●</Text>
+        <Text style={{ color: isHighlighted ? theme.selection.text : theme.text.dim }}>{isHighlighted ? "▸" : " "}{timeStr} </Text>
         {attendanceIndicator && (
           <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
             {attendanceIndicator}
           </Text>
         )}
-        <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
+        <Text style={{ color: textColor, bold: isHighlighted, dim: shouldDim }}>
           {displayTitle}
         </Text>
       </Box>
@@ -264,9 +276,7 @@ function EventColumn({
   } else {
     return (
       <Box style={{ width, bg: bgColor }}>
-        <Text style={{ color: textColor, dim: isDeclined }}>
-          │
-        </Text>
+        <Text style={{ color: eventColor, dim: shouldDim }}>│</Text>
       </Box>
     );
   }
@@ -374,9 +384,11 @@ function AllDayEventRow({
   const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
   const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
   const isDeclined = responseStatus === "declined";
+  const isPast = isEventPast(event, getLocalTimezone());
+  const shouldDim = isDeclined || isPast;
 
   const bgColor = isHighlighted ? theme.selection.background : undefined;
-  const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
+  const textColor = isHighlighted ? theme.selection.text : (shouldDim ? theme.text.dim : eventColor);
 
   return (
     <Box style={{ flexDirection: "row" }}>
@@ -385,16 +397,14 @@ function AllDayEventRow({
       </Box>
       <Text style={{ color: theme.text.dim }}>│</Text>
       <Box style={{ paddingLeft: 1, flexDirection: "row", bg: bgColor }}>
-        <Text style={{ color: textColor, bold: isHighlighted }}>
-          {isHighlighted ? "▸" : "○"}
-        </Text>
-        <Text> </Text>
+        <Text style={{ color: eventColor, dim: shouldDim }}>●</Text>
+        <Text style={{ color: isHighlighted ? theme.selection.text : theme.text.dim }}>{isHighlighted ? "▸" : " "}</Text>
         {attendanceIndicator && (
           <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
             {attendanceIndicator}
           </Text>
         )}
-        <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
+        <Text style={{ color: textColor, bold: isHighlighted, dim: shouldDim }}>
           {getDisplayTitle(event)}
         </Text>
       </Box>
@@ -504,23 +514,26 @@ function StickyEventHeaders({
         const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
         const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
         const isDeclined = responseStatus === "declined";
+        const isPast = isEventPast(event, getLocalTimezone());
+        const shouldDim = isDeclined || isPast;
         
         const bgColor = isHighlighted ? theme.selection.background : undefined;
-        const textColor = isHighlighted ? theme.selection.text : (isDeclined ? theme.text.dim : eventColor);
+        const textColor = isHighlighted ? theme.selection.text : (shouldDim ? theme.text.dim : eventColor);
         
         return (
           <Box key={event.id} style={{ flexDirection: "row" }}>
             <Box style={{ width: HOUR_LABEL_WIDTH }}>
               <Text style={{ color: theme.text.dim, dim: true }}>{"↑".padStart(HOUR_LABEL_WIDTH - 1)}</Text>
             </Box>
-            <Text style={{ color: textColor }}>┬</Text>
+            <Text style={{ color: eventColor, dim: shouldDim }}>┬</Text>
             <Box style={{ paddingLeft: 1 + layout.column * COLUMN_WIDTH, flexDirection: "row", bg: bgColor }}>
+              <Text style={{ color: eventColor, dim: shouldDim }}>● </Text>
               {attendanceIndicator && (
                 <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>
                   {attendanceIndicator}
                 </Text>
               )}
-              <Text style={{ color: textColor, bold: isHighlighted, dim: isDeclined }}>
+              <Text style={{ color: textColor, bold: isHighlighted, dim: shouldDim }}>
                 {getDisplayTitle(event)}
               </Text>
             </Box>

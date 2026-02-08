@@ -1,5 +1,6 @@
 import React from "react";
 import { Box } from "@nick-skriabin/glyph";
+import { CalendarsSidebar } from "./CalendarsSidebar.tsx";
 import { DaysSidebar } from "./DaysSidebar.tsx";
 import { Timeline } from "./Timeline.tsx";
 
@@ -14,6 +15,7 @@ export function DayView() {
         clip: true,
       }}
     >
+      <CalendarsSidebar />
       <DaysSidebar />
       <Timeline />
     </Box>

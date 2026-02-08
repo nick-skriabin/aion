@@ -10,8 +10,9 @@ import { KeyboardHandler } from "./KeyboardHandler.tsx";
 import { HelpDialog } from "./HelpDialog.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { NotificationsPanel } from "./NotificationsPanel.tsx";
-import { overlayStackAtom, isLoggedInAtom } from "../state/atoms.ts";
+import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
 import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
+import { getDisabledCalendars } from "../config/calendarSettings.ts";
 import { initDb } from "../db/db.ts";
 import { loadConfig } from "../config/config.ts";
 import { theme } from "./theme.ts";
@@ -51,6 +52,8 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const loadEvents = useSetAtom(loadEventsAtom);
   const checkAuthStatus = useSetAtom(checkAuthStatusAtom);
+  const setDisabledCalendars = useSetAtom(enabledCalendarsAtom);
+  const setCalendarsLoaded = useSetAtom(enabledCalendarsLoadedAtom);
   const isLoggedIn = useAtomValue(isLoggedInAtom);
   
   // Initialize database and load events
@@ -59,6 +62,11 @@ function AppContent() {
       try {
         await loadConfig();
         await initDb();
+        
+        // Load calendar settings from disk
+        const disabled = await getDisabledCalendars();
+        setDisabledCalendars(disabled);
+        setCalendarsLoaded(true);
         
         // Check auth status and start background sync if logged in
         await checkAuthStatus();
@@ -72,7 +80,7 @@ function AppContent() {
     }
     
     init();
-  }, [loadEvents, checkAuthStatus]);
+  }, [loadEvents, checkAuthStatus, setDisabledCalendars, setCalendarsLoaded]);
   
   if (loading) {
     return (
@@ -126,7 +134,7 @@ function AppContent() {
           )}
         </Box>
         <Text style={{ color: theme.text.dim }}>
-          ?:help  q:quit
+          C:calendars  ?:help  q:quit
         </Text>
       </Box>
       
