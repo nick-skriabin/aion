@@ -9,6 +9,8 @@
   <em>Beautiful. Fast. Keyboard-driven.</em>
 </p>
 
+![Aion App](./images/app.jpg)
+
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
   <a href="#keybindings">Keybindings</a> •
