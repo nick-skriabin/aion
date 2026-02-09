@@ -75,9 +75,16 @@ const ThemeSchema = z.object({
   }),
 }).default({});
 
+// Google OAuth configuration
+const GoogleSchema = z.object({
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+}).default({});
+
 // Full config schema
 export const ConfigSchema = z.object({
   theme: ThemeSchema,
+  google: GoogleSchema,
 }).default({});
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -58,7 +58,7 @@ export function useDeleteEvent() {
         { 
           okText: "Yes, notify", 
           cancelText: "No", 
-          style: { border: "none" },
+          style: { border: "none", paddingX: 1 },
           okButtonStyle: { bg: theme.accent.error },
         }
       );
@@ -79,7 +79,8 @@ export function useDeleteEvent() {
         okText: "Delete", 
         cancelText: "Cancel", 
         style: { border: "none" },
-        okButtonStyle: { bg: theme.accent.error },
+        okButtonStyle: { bg: theme.accent.error, paddingX: 1 },
+        cancelButtonStyle: { paddingX: 1 },
       }
     );
 
@@ -114,7 +115,7 @@ export function useDeleteEvent() {
         { 
           okText: "Leave", 
           cancelText: "Cancel", 
-          style: { border: "none" },
+          style: { border: "none", paddingX: 1 },
           okButtonStyle: { bg: theme.accent.error },
         }
       );
@@ -152,7 +153,7 @@ export function useDeleteEvent() {
         { 
           okText: "Yes, notify", 
           cancelText: "No", 
-          style: { border: "none" },
+          style: { border: "none", paddingX: 1 },
           okButtonStyle: { bg: theme.accent.error },
         }
       );

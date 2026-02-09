@@ -8,16 +8,65 @@
  * For desktop apps, the secret is not truly "secret" (it's embedded in the app),
  * but Google still requires it. PKCE provides the actual security.
  * 
- * Environment variables (to use your own credentials):
- * - AION_GOOGLE_CLIENT_ID: Your Google Cloud OAuth client ID
- * - AION_GOOGLE_CLIENT_SECRET: Your Google Cloud OAuth client secret
+ * Configure credentials via:
+ * 1. Environment variables: AION_GOOGLE_CLIENT_ID and AION_GOOGLE_CLIENT_SECRET
+ * 2. Config file (~/.aion/config.toml):
+ *    [google]
+ *    clientId = "your-client-id.apps.googleusercontent.com"
+ *    clientSecret = "your-client-secret"
  */
 
-// Client ID - use env var or default
-export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+import { getConfig } from "../config/config.ts";
 
-// Client secret - REQUIRED by Google even with PKCE for Desktop apps
-export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+// Get credentials from config or environment variables (fallback)
+function getCredentials(): { clientId: string | undefined; clientSecret: string | undefined } {
+  const config = getConfig();
+  
+  return {
+    clientId: config.google?.clientId || process.env.AION_GOOGLE_CLIENT_ID,
+    clientSecret: config.google?.clientSecret || process.env.AION_GOOGLE_CLIENT_SECRET,
+  };
+}
+
+// Lazy getters for credentials (config may not be loaded at module init)
+export function getGoogleClientId(): string {
+  const { clientId } = getCredentials();
+  if (!clientId) {
+    throw new Error(
+      "Google Client ID not configured.\n\n" +
+      "Please set up your Google Cloud credentials:\n" +
+      "1. Create a project at https://console.cloud.google.com\n" +
+      "2. Enable Google Calendar API\n" +
+      "3. Create OAuth 2.0 credentials (Desktop app type)\n" +
+      "4. Add credentials to ~/.aion/config.toml:\n\n" +
+      "   [google]\n" +
+      '   clientId = "your-client-id.apps.googleusercontent.com"\n' +
+      '   clientSecret = "your-client-secret"\n\n' +
+      "Or set environment variables:\n" +
+      "   export AION_GOOGLE_CLIENT_ID=your-client-id\n" +
+      "   export AION_GOOGLE_CLIENT_SECRET=your-client-secret\n"
+    );
+  }
+  return clientId;
+}
+
+export function getGoogleClientSecret(): string {
+  const { clientSecret } = getCredentials();
+  if (!clientSecret) {
+    throw new Error(
+      "Google Client Secret not configured.\n\n" +
+      "Please add your client secret to ~/.aion/config.toml:\n\n" +
+      "   [google]\n" +
+      '   clientId = "your-client-id.apps.googleusercontent.com"\n' +
+      '   clientSecret = "your-client-secret"\n'
+    );
+  }
+  return clientSecret;
+}
+
+// Legacy exports for backwards compatibility (will throw if not configured)
+export const GOOGLE_CLIENT_ID = process.env.AION_GOOGLE_CLIENT_ID || "";
+export const GOOGLE_CLIENT_SECRET = process.env.AION_GOOGLE_CLIENT_SECRET || "";
 
 // OAuth configuration
 export const OAUTH_CONFIG = {
@@ -93,7 +142,7 @@ export async function generatePKCE(): Promise<PKCEParams> {
  */
 export function getAuthUrl(state: string, codeChallenge: string): string {
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: getGoogleClientId(),
     redirect_uri: OAUTH_CONFIG.redirectUri,
     response_type: "code",
     scope: OAUTH_CONFIG.scopes.join(" "),
@@ -114,7 +163,7 @@ export function getAuthUrl(state: string, codeChallenge: string): string {
  */
 export function getIncrementalAuthUrl(loginHint: string, state: string, codeChallenge: string): string {
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: getGoogleClientId(),
     redirect_uri: OAUTH_CONFIG.redirectUri,
     response_type: "code",
     scope: OAUTH_CONFIG.scopes.join(" "),

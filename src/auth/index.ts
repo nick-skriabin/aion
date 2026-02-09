@@ -16,6 +16,6 @@ export {
   removeAccount,
   loadAccountsStore,
 } from "./tokens.ts";
-export { GOOGLE_CLIENT_ID, OAUTH_CONFIG } from "./credentials.ts";
+export { getGoogleClientId, OAUTH_CONFIG } from "./credentials.ts";
 export type { TokenData, AccountInfo, AccountData, AccountsStore } from "./tokens.ts";
 export type { LoginResult } from "./oauth.ts";

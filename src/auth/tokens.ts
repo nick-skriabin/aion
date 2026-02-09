@@ -4,7 +4,7 @@
 
 import { join } from "path";
 import { homedir } from "os";
-import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH_CONFIG } from "./credentials.ts";
+import { getGoogleClientId, getGoogleClientSecret, OAUTH_CONFIG } from "./credentials.ts";
 import { authLogger } from "../lib/logger.ts";
 
 export interface TokenData {
@@ -204,8 +204,8 @@ async function refreshAccountToken(email: string, refreshToken: string): Promise
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
+      client_id: getGoogleClientId(),
+      client_secret: getGoogleClientSecret(),
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
@@ -289,8 +289,8 @@ export async function exchangeCodeForTokens(code: string, codeVerifier: string):
     },
     body: new URLSearchParams({
       code,
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
+      client_id: getGoogleClientId(),
+      client_secret: getGoogleClientSecret(),
       redirect_uri: OAUTH_CONFIG.redirectUri,
       grant_type: "authorization_code",
       code_verifier: codeVerifier, // PKCE verification

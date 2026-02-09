@@ -81,13 +81,55 @@ cd aion
 bun install
 ```
 
-### 2. Run
+### 2. Set Up Google Cloud Credentials
+
+Aion requires your own Google Cloud credentials to access Google Calendar. Here's how to set them up:
+
+#### Create a Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project (or select an existing one)
+3. Enable the **Google Calendar API**:
+   - Go to "APIs & Services" → "Library"
+   - Search for "Google Calendar API"
+   - Click "Enable"
+
+#### Create OAuth Credentials
+
+1. Go to "APIs & Services" → "Credentials"
+2. Click "Create Credentials" → "OAuth client ID"
+3. If prompted, configure the OAuth consent screen:
+   - User Type: **External** (or Internal for Workspace)
+   - Add your email as a test user
+4. Create OAuth client ID:
+   - Application type: **Desktop app**
+   - Name: "Aion" (or anything you like)
+5. Copy the **Client ID** and **Client Secret**
+
+#### Configure Aion
+
+Add your credentials to `~/.aion/config.toml`:
+
+```toml
+[google]
+clientId = "your-client-id.apps.googleusercontent.com"
+clientSecret = "your-client-secret"
+```
+
+Or use environment variables:
+
+```bash
+export AION_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export AION_GOOGLE_CLIENT_SECRET="your-client-secret"
+```
+
+### 3. Run
 
 ```bash
 bun dev
 ```
 
-### 3. Connect Google Calendar
+### 4. Connect Google Calendar
 
 ```
 :login
@@ -95,7 +137,7 @@ bun dev
 
 Follow the OAuth flow in your browser. Aion supports multiple Google accounts.
 
-### 4. Navigate
+### 5. Navigate
 
 Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view details.
 
@@ -282,7 +324,7 @@ All data is stored locally in `~/.aion/`:
 | File | Description |
 |------|-------------|
 | `aion.db` | SQLite database with all events |
-| `config.toml` | User configuration (theme, etc.) |
+| `config.toml` | User configuration (Google credentials, theme) |
 | `tokens.json` | OAuth tokens (encrypted) |
 | `calendar-settings.json` | Calendar visibility preferences |
 | `account-settings.json` | Custom account names |

@@ -11,6 +11,12 @@ const CONFIG_PATH = join(CONFIG_DIR, "config.toml");
 export const DEFAULT_CONFIG_TOML = `# Aion Configuration
 # Place this file at ~/.aion/config.toml
 
+# Google OAuth credentials (required)
+# Get these from https://console.cloud.google.com
+[google]
+clientId = ""
+clientSecret = ""
+
 [theme.text]
 primary = "white"
 secondary = "whiteBright"
