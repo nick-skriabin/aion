@@ -110,7 +110,7 @@ Aion requires your own Google Cloud credentials to access Google Calendar. Here'
 
 #### Configure Aion
 
-Add your credentials to `~/.aion/config.toml`:
+Add your credentials to `~/.config/aion/config.toml`:
 
 ```toml
 [google]
@@ -274,7 +274,7 @@ When creating or editing events, you can use natural language for dates and time
 
 ## Configuration
 
-Create `~/.aion/config.toml` to customize Aion:
+Create `~/.config/aion/config.toml` to customize Aion:
 
 ### Theme
 
@@ -328,16 +328,35 @@ background = "black"
 
 ## Data Storage
 
-All data is stored locally in `~/.aion/`:
+Aion supports two directory layouts:
 
+### Legacy Layout (`~/.aion/`)
+
+If `~/.aion/` exists, Aion uses it for backward compatibility. All files are stored in this single directory.
+
+### XDG Layout (new installations)
+
+New installations follow the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html):
+
+**Configuration** (`~/.config/aion/`):
+| File | Description |
+|------|-------------|
+| `config.toml` | User configuration (Google credentials, theme) |
+| `contacts.json` | Optional manual contacts for name lookup |
+
+**Data** (`~/.local/share/aion/`):
 | File | Description |
 |------|-------------|
 | `aion.db` | SQLite database with all events |
-| `config.toml` | User configuration (Google credentials, theme) |
-| `tokens.json` | OAuth tokens (encrypted) |
+| `accounts.json` | OAuth tokens and account info |
 | `calendar-settings.json` | Calendar visibility preferences |
 | `account-settings.json` | Custom account names |
+| `sync-tokens.json` | Incremental sync tokens |
 | `logs/` | Application logs (daily rotation) |
+
+You can override XDG paths with environment variables:
+- `XDG_CONFIG_HOME` (default: `~/.config`)
+- `XDG_DATA_HOME` (default: `~/.local/share`)
 
 ---
 

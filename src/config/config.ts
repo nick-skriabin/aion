@@ -1,15 +1,11 @@
-import { join } from "path";
-import { homedir } from "os";
 import TOML from "@iarna/toml";
 import { ConfigSchema, type Config } from "./schema.ts";
 import { appLogger } from "../lib/logger.ts";
-
-const CONFIG_DIR = join(homedir(), ".aion");
-const CONFIG_PATH = join(CONFIG_DIR, "config.toml");
+import { AION_CONFIG_DIR, CONFIG_FILE, ensureDirectories } from "../lib/paths.ts";
 
 // Default config as TOML string for reference
 export const DEFAULT_CONFIG_TOML = `# Aion Configuration
-# Place this file at ~/.aion/config.toml
+# Place this file at ~/.config/aion/config.toml
 
 # Google OAuth credentials (required)
 # Get these from https://console.cloud.google.com
@@ -50,8 +46,11 @@ let cachedConfig: Config | null = null;
 export async function loadConfig(): Promise<Config> {
   if (cachedConfig) return cachedConfig;
 
+  // Ensure directories exist
+  await ensureDirectories();
+
   try {
-    const file = Bun.file(CONFIG_PATH);
+    const file = Bun.file(CONFIG_FILE);
     if (await file.exists()) {
       const content = await file.text();
       const parsed = TOML.parse(content);
@@ -77,8 +76,8 @@ export function getConfig(): Config {
 
 export async function createDefaultConfig(): Promise<void> {
   try {
-    await Bun.write(join(CONFIG_DIR, ".keep"), "");
-    await Bun.write(CONFIG_PATH, DEFAULT_CONFIG_TOML);
+    await ensureDirectories();
+    await Bun.write(CONFIG_FILE, DEFAULT_CONFIG_TOML);
   } catch {
     // Ignore errors
   }

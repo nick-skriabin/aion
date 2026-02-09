@@ -10,7 +10,7 @@
  * 
  * Configure credentials via:
  * 1. Environment variables: AION_GOOGLE_CLIENT_ID and AION_GOOGLE_CLIENT_SECRET
- * 2. Config file (~/.aion/config.toml):
+ * 2. Config file (~/.config/aion/config.toml):
  *    [google]
  *    clientId = "your-client-id.apps.googleusercontent.com"
  *    clientSecret = "your-client-secret"
@@ -38,7 +38,7 @@ export function getGoogleClientId(): string {
       "1. Create a project at https://console.cloud.google.com\n" +
       "2. Enable Google Calendar API\n" +
       "3. Create OAuth 2.0 credentials (Desktop app type)\n" +
-      "4. Add credentials to ~/.aion/config.toml:\n\n" +
+      "4. Add credentials to ~/.config/aion/config.toml:\n\n" +
       "   [google]\n" +
       '   clientId = "your-client-id.apps.googleusercontent.com"\n' +
       '   clientSecret = "your-client-secret"\n\n' +
@@ -55,7 +55,7 @@ export function getGoogleClientSecret(): string {
   if (!clientSecret) {
     throw new Error(
       "Google Client Secret not configured.\n\n" +
-      "Please add your client secret to ~/.aion/config.toml:\n\n" +
+      "Please add your client secret to ~/.config/aion/config.toml:\n\n" +
       "   [google]\n" +
       '   clientId = "your-client-id.apps.googleusercontent.com"\n' +
       '   clientSecret = "your-client-secret"\n'

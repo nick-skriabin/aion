@@ -1,11 +1,12 @@
 /**
  * Logger module with file persistence
  * 
- * Logs are stored in ~/.aion/logs/ with daily rotation
+ * Logs are stored in ~/.local/share/aion/logs/ with daily rotation
+ * (respects XDG Base Directory Specification)
  */
 
 import { join } from "path";
-import { homedir } from "os";
+import { LOGS_DIR, ensureDirectories } from "./paths.ts";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -16,9 +17,6 @@ interface LogEntry {
   message: string;
   data?: unknown;
 }
-
-const AION_DIR = join(homedir(), ".aion");
-const LOGS_DIR = join(AION_DIR, "logs");
 
 // Log level priority (higher = more severe)
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -43,11 +41,7 @@ function getLogFilePath(): string {
  * Ensure logs directory exists
  */
 async function ensureLogsDir(): Promise<void> {
-  try {
-    await Bun.write(join(LOGS_DIR, ".keep"), "");
-  } catch {
-    // Directory might already exist
-  }
+  await ensureDirectories();
 }
 
 /**
@@ -104,7 +98,7 @@ async function writeLog(entry: LogEntry): Promise<void> {
  * Create a logger instance for a specific category
  * 
  * IMPORTANT: Never output to console - it corrupts the TUI!
- * All logs go to ~/.aion/logs/ only.
+ * All logs go to ~/.local/share/aion/logs/ only.
  */
 export function createLogger(category: string) {
   const log = (level: LogLevel, message: string, data?: unknown) => {

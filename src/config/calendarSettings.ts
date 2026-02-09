@@ -2,11 +2,7 @@
  * Persistence for calendar visibility settings
  */
 
-import { join } from "path";
-import { homedir } from "os";
-
-const AION_DIR = join(homedir(), ".aion");
-const SETTINGS_FILE = join(AION_DIR, "calendar-settings.json");
+import { CALENDAR_SETTINGS_FILE, ensureDirectories } from "../lib/paths.ts";
 
 interface CalendarSettings {
   // Set of disabled calendar IDs (format: "accountEmail:calendarId")
@@ -19,7 +15,7 @@ interface CalendarSettings {
  */
 export async function loadCalendarSettings(): Promise<CalendarSettings> {
   try {
-    const file = Bun.file(SETTINGS_FILE);
+    const file = Bun.file(CALENDAR_SETTINGS_FILE);
     if (await file.exists()) {
       const content = await file.text();
       return JSON.parse(content) as CalendarSettings;
@@ -35,9 +31,8 @@ export async function loadCalendarSettings(): Promise<CalendarSettings> {
  */
 export async function saveCalendarSettings(settings: CalendarSettings): Promise<void> {
   try {
-    // Ensure directory exists
-    await Bun.write(join(AION_DIR, ".keep"), "");
-    await Bun.write(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+    await ensureDirectories();
+    await Bun.write(CALENDAR_SETTINGS_FILE, JSON.stringify(settings, null, 2));
   } catch (error) {
     console.error("Failed to save calendar settings:", error);
   }

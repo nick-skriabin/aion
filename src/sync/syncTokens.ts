@@ -3,12 +3,8 @@
  * Stores tokens per calendar (accountEmail:calendarId)
  */
 
-import { join } from "path";
-import { homedir } from "os";
-import { mkdir } from "fs/promises";
 import { appLogger } from "../lib/logger.ts";
-
-const SYNC_TOKENS_PATH = join(homedir(), ".aion", "sync-tokens.json");
+import { SYNC_TOKENS_FILE, ensureDirectories } from "../lib/paths.ts";
 
 interface SyncTokenStore {
   // Key is "accountEmail:calendarId"
@@ -33,7 +29,7 @@ async function loadTokens(forceReload = false): Promise<SyncTokenStore> {
   if (cache && !forceReload) return cache;
   
   try {
-    const file = Bun.file(SYNC_TOKENS_PATH);
+    const file = Bun.file(SYNC_TOKENS_FILE);
     if (await file.exists()) {
       cache = await file.json();
       appLogger.debug("Loaded sync tokens from disk", { count: Object.keys(cache!.tokens).length });
@@ -53,9 +49,8 @@ async function loadTokens(forceReload = false): Promise<SyncTokenStore> {
  */
 async function saveTokens(store: SyncTokenStore): Promise<void> {
   try {
-    // Ensure directory exists
-    await mkdir(join(homedir(), ".aion"), { recursive: true });
-    await Bun.write(SYNC_TOKENS_PATH, JSON.stringify(store, null, 2));
+    await ensureDirectories();
+    await Bun.write(SYNC_TOKENS_FILE, JSON.stringify(store, null, 2));
     cache = store;
   } catch (error) {
     appLogger.error("Failed to save sync tokens", { error });

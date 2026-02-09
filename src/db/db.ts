@@ -1,22 +1,7 @@
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import * as schema from "./schema.ts";
-import { join } from "path";
-import { homedir } from "os";
-
-// Database file location
-const DB_DIR = join(homedir(), ".aion");
-const DB_PATH = join(DB_DIR, "aion.db");
-
-// Ensure directory exists
-async function ensureDbDir(): Promise<void> {
-  const dir = Bun.file(DB_DIR);
-  try {
-    await Bun.write(join(DB_DIR, ".keep"), "");
-  } catch {
-    // Directory might exist, that's fine
-  }
-}
+import { DB_FILE, ensureDirectories } from "../lib/paths.ts";
 
 // Initialize SQLite database
 let sqlite: Database | null = null;
@@ -25,9 +10,9 @@ let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 export async function initDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
   if (db) return db;
   
-  await ensureDbDir();
+  await ensureDirectories();
   
-  sqlite = new Database(DB_PATH);
+  sqlite = new Database(DB_FILE);
   
   // Run migrations inline (simple approach for v0)
   sqlite.exec(`
@@ -91,4 +76,4 @@ export function closeDb(): void {
   }
 }
 
-export { DB_PATH };
+export { DB_FILE as DB_PATH };

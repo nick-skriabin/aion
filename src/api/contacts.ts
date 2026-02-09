@@ -3,7 +3,7 @@
  * 
  * Looks up display names for email addresses using:
  * 1. Stored account names (for your own accounts)
- * 2. Optional manual contacts file (~/.aion/contacts.json)
+ * 2. Optional manual contacts file (~/.config/aion/contacts.json)
  * 
  * Manual contacts file format:
  * {
@@ -12,12 +12,9 @@
  * }
  */
 
-import { join } from "path";
-import { homedir } from "os";
 import { getAccounts } from "../auth/tokens.ts";
 import { apiLogger } from "../lib/logger.ts";
-
-const MANUAL_CONTACTS_FILE = join(homedir(), ".aion", "contacts.json");
+import { CONTACTS_FILE } from "../lib/paths.ts";
 
 let manualContacts: Record<string, string> | null = null;
 
@@ -28,7 +25,7 @@ async function loadManualContacts(): Promise<Record<string, string>> {
   if (manualContacts !== null) return manualContacts;
   
   try {
-    const file = Bun.file(MANUAL_CONTACTS_FILE);
+    const file = Bun.file(CONTACTS_FILE);
     if (await file.exists()) {
       manualContacts = await file.json();
       apiLogger.debug(`Loaded ${Object.keys(manualContacts!).length} manual contacts`);

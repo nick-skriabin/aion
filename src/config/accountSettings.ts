@@ -4,9 +4,7 @@
  */
 
 import { appLogger } from "../lib/logger.ts";
-
-const CONFIG_DIR = `${process.env.HOME}/.aion`;
-const SETTINGS_FILE = `${CONFIG_DIR}/account-settings.json`;
+import { ACCOUNT_SETTINGS_FILE, ensureDirectories } from "../lib/paths.ts";
 
 export interface AccountSettings {
   customNames: Record<string, string>; // email -> custom name
@@ -18,7 +16,7 @@ const defaultSettings: AccountSettings = {
 
 export async function loadAccountSettings(): Promise<AccountSettings> {
   try {
-    const file = Bun.file(SETTINGS_FILE);
+    const file = Bun.file(ACCOUNT_SETTINGS_FILE);
     if (await file.exists()) {
       const data = await file.json();
       return { ...defaultSettings, ...data };
@@ -31,8 +29,8 @@ export async function loadAccountSettings(): Promise<AccountSettings> {
 
 export async function saveAccountSettings(settings: AccountSettings): Promise<void> {
   try {
-    // Ensure config directory exists
-    await Bun.write(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+    await ensureDirectories();
+    await Bun.write(ACCOUNT_SETTINGS_FILE, JSON.stringify(settings, null, 2));
   } catch (error) {
     appLogger.error("Failed to save account settings:", error);
   }

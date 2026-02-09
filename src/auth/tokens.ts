@@ -3,9 +3,9 @@
  */
 
 import { join } from "path";
-import { homedir } from "os";
 import { getGoogleClientId, getGoogleClientSecret, OAUTH_CONFIG } from "./credentials.ts";
 import { authLogger } from "../lib/logger.ts";
+import { AION_DATA_DIR, TOKENS_FILE, LEGACY_AION_DIR, ensureDirectories } from "../lib/paths.ts";
 
 export interface TokenData {
   access_token: string;
@@ -33,22 +33,10 @@ export interface AccountsStore {
   defaultAccount?: string; // Email of default account
 }
 
-const AION_DIR = join(homedir(), ".aion");
-const ACCOUNTS_FILE = join(AION_DIR, "accounts.json");
+const ACCOUNTS_FILE = join(AION_DATA_DIR, "accounts.json");
 
 // Legacy single-account file (for migration)
-const LEGACY_TOKENS_FILE = join(AION_DIR, "tokens.json");
-
-/**
- * Ensure the .aion directory exists
- */
-async function ensureAionDir(): Promise<void> {
-  try {
-    await Bun.write(join(AION_DIR, ".keep"), "");
-  } catch {
-    // Directory might already exist
-  }
-}
+const LEGACY_TOKENS_FILE = join(LEGACY_AION_DIR, "tokens.json");
 
 /**
  * Load accounts store from disk
@@ -89,7 +77,7 @@ export async function loadAccountsStore(): Promise<AccountsStore> {
  * Save accounts store to disk
  */
 async function saveAccountsStore(store: AccountsStore): Promise<void> {
-  await ensureAionDir();
+  await ensureDirectories();
   await Bun.write(ACCOUNTS_FILE, JSON.stringify(store, null, 2));
 }
 
