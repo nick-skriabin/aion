@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'  # Matches v0.0.0, v1.2.3, etc.
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -31,9 +30,6 @@ jobs:
           - os: macos-latest
             target: bun-darwin-arm64
             artifact: aion-darwin-arm64
-          - os: windows-latest
-            target: bun-windows-x64
-            artifact: aion-windows-x64.exe
 
     runs-on: ${{ matrix.os }}
     
@@ -52,114 +48,34 @@ jobs:
       - name: Build binary
         run: bun build --compile --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }}
       
-      - name: Make executable (Unix)
-        if: runner.os != 'Windows'
+      - name: Make executable
         run: chmod +x ${{ matrix.artifact }}
       
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-          retention-days: 1
-
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Get version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Version: ${VERSION}"
-      
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      
-      - name: Prepare release files
-        run: |
-          mkdir -p release
-          for dir in artifacts/*/; do
-            cp -r "$dir"* release/
-          done
-          echo "Release files:"
-          ls -la release/
-      
-      - name: Generate checksums
-        run: |
-          cd release
-          sha256sum * > checksums.txt
-          cat checksums.txt
-      
-      - name: Create GitHub Release
-        id: create_release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Aion v${{ steps.version.outputs.version }}
-          body: |
-            ## Installation
-            
-            ### Homebrew (macOS/Linux)
-            ```bash
-            brew tap nick-skriabin/tap
-            brew install aion
-            ```
-            
-            ### Manual Download
-            Download the appropriate binary for your platform below.
-            
-            | Platform | Binary |
-            |----------|--------|
-            | macOS (Apple Silicon) | `aion-darwin-arm64` |
-            | macOS (Intel) | `aion-darwin-x64` |
-            | Linux (x64) | `aion-linux-x64` |
-            | Linux (ARM64) | `aion-linux-arm64` |
-            | Windows | `aion-windows-x64.exe` |
-            
-            Make executable and run:
-            ```bash
-            chmod +x aion-*
-            ./aion-darwin-arm64  # or your platform
-            ```
-            
-            ## What's Changed
-          files: |
-            release/*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+          files: ${{ matrix.artifact }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-homebrew:
     name: Update Homebrew Tap
-    needs: release
+    needs: build
     runs-on: ubuntu-latest
-    # Only run if HOMEBREW_TAP_TOKEN is set
-    if: ${{ vars.ENABLE_HOMEBREW_UPDATE != 'false' }}
     
     steps:
-      - name: Get version from tag
+      - name: Get version from release
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${{ github.event.release.tag_name }}
+          VERSION=${VERSION#v}  # Remove 'v' prefix
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
       
       - name: Wait for release assets to be available
         run: |
           echo "Waiting for release assets..."
-          sleep 60
+          sleep 30
       
       - name: Download and calculate SHA256 checksums
         id: sha256

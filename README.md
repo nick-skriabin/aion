@@ -92,7 +92,6 @@ Download the latest release for your platform from the [Releases](https://github
 | macOS (Intel) | `aion-darwin-x64` |
 | Linux (x64) | `aion-linux-x64` |
 | Linux (ARM64) | `aion-linux-arm64` |
-| Windows | `aion-windows-x64.exe` |
 
 ```bash
 # Make executable (macOS/Linux)
