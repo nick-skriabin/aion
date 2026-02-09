@@ -13,10 +13,11 @@ export type FocusContext =
   | "dialog"
   | "command"
   | "confirm"
-  | "notifications";
+  | "notifications"
+  | "search";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith" | "accounts";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith" | "accounts" | "search";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -57,6 +58,17 @@ export const timelineScrollAtom = atom<number>(8); // Default to 8 AM
 
 // Whether all-day events section is expanded (shows all events vs collapsed summary)
 export const allDayExpandedAtom = atom<boolean>(false);
+
+// ===== Search =====
+
+// Search query
+export const searchQueryAtom = atom<string>("");
+
+// Search results (event IDs)
+export const searchResultsAtom = atom<GCalEvent[]>([]);
+
+// Selected index in search results
+export const searchSelectedIndexAtom = atom<number>(0);
 
 // ===== Calendar Sidebar =====
 

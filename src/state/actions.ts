@@ -1,6 +1,7 @@
 import { atom, type Getter, type Setter, type WritableAtom } from "jotai";
 import { DateTime } from "luxon";
 import type { GCalEvent, ResponseStatus } from "../domain/gcalEvent.ts";
+import { searchEvents, buildSearchIndex } from "../search/index.ts";
 import { findNearestEvent } from "../domain/layout.ts";
 import { getNowMinutes, getLocalTimezone } from "../domain/time.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
@@ -34,6 +35,9 @@ import {
   type RecurrenceScope,
   type Message,
   type MessageType,
+  searchQueryAtom,
+  searchResultsAtom,
+  searchSelectedIndexAtom,
 } from "./atoms.ts";
 
 // Helper to create action atoms
@@ -889,6 +893,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
     case "upgrade":
       set(upgradePermissionsAtom);
       break;
+    case "openSearch":
+      set(openSearchAtom);
+      break;
     default:
       // Unknown action
       break;
@@ -1244,6 +1251,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
           }
           set(eventsAtom, eventsMap);
           
+          // Rebuild search index after sync
+          buildSearchIndex(eventsMap);
+          
           if (!isBackgroundSync) {
             set(showMessageAtom, { 
               text: `Synced: ${incrementalResult.changed.length} updated, ${incrementalResult.deleted.length} removed`, 
@@ -1356,6 +1366,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     }
     set(eventsAtom, eventsMap);
     
+    // Rebuild search index after full sync
+    buildSearchIndex(eventsMap);
+    
     if (!isBackgroundSync) {
       set(showMessageAtom, { 
         text: `Synced ${uniqueEvents.length} events`, 
@@ -1459,4 +1472,90 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
 // Open accounts management dialog
 export const showAccountsAtom = atom(null, async (get, set) => {
   set(pushOverlayAtom, { kind: "accounts" });
+});
+
+// ===== Search Actions =====
+
+// Open search (inline, not overlay)
+export const openSearchAtom = atom(null, (get, set) => {
+  set(searchQueryAtom, "");
+  set(searchResultsAtom, []);
+  set(searchSelectedIndexAtom, 0);
+  set(focusAtom, "search");
+});
+
+// Update search query and results
+export const updateSearchQueryAtom = atom(null, (get, set, query: string) => {
+  set(searchQueryAtom, query);
+  
+  if (!query.trim()) {
+    set(searchResultsAtom, []);
+    set(searchSelectedIndexAtom, 0);
+    return;
+  }
+  
+  const results = searchEvents(query);
+  
+  // Sort results by date for consistent display and navigation
+  const sortedResults = [...results].sort((a, b) => {
+    const aStart = a.start?.dateTime || a.start?.date || "";
+    const bStart = b.start?.dateTime || b.start?.date || "";
+    return aStart.localeCompare(bStart);
+  });
+  
+  set(searchResultsAtom, sortedResults);
+  set(searchSelectedIndexAtom, 0);
+});
+
+// Move search selection
+export const moveSearchSelectionAtom = atom(null, (get, set, direction: "up" | "down") => {
+  const results = get(searchResultsAtom);
+  const currentIndex = get(searchSelectedIndexAtom);
+  
+  if (results.length === 0) return;
+  
+  let newIndex: number;
+  if (direction === "down") {
+    newIndex = currentIndex < results.length - 1 ? currentIndex + 1 : 0;
+  } else {
+    newIndex = currentIndex > 0 ? currentIndex - 1 : results.length - 1;
+  }
+  
+  set(searchSelectedIndexAtom, newIndex);
+});
+
+// Select search result and jump to event
+export const selectSearchResultAtom = atom(null, (get, set) => {
+  const results = get(searchResultsAtom);
+  const selectedIndex = get(searchSelectedIndexAtom);
+  
+  if (results.length === 0 || selectedIndex >= results.length) return;
+  
+  const event = results[selectedIndex];
+  if (!event) return;
+  
+  // Get event's date
+  const eventStart = event.start?.dateTime 
+    ? DateTime.fromISO(event.start.dateTime)
+    : event.start?.date 
+      ? DateTime.fromISO(event.start.date)
+      : null;
+  
+  if (eventStart) {
+    // Jump to the event's date
+    set(selectedDayAtom, eventStart.startOf("day"));
+    set(viewAnchorDayAtom, eventStart.startOf("day"));
+  }
+  
+  // Select the event
+  set(selectedEventIdAtom, event.id);
+  
+  // Return to timeline (search is inline, no overlay to pop)
+  set(focusAtom, "timeline");
+});
+
+// Rebuild search index from current events
+export const rebuildSearchIndexAtom = atom(null, (get, set) => {
+  const events = get(eventsAtom);
+  buildSearchIndex(events);
 });

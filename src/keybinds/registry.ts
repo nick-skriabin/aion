@@ -22,6 +22,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "ctrl+m", display: "Ctrl+m", description: "Meet with...", action: "openMeetWith", command: "meet" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
+    { key: "/", display: "/", description: "Search events", action: "openSearch", command: "search" },
     { key: "q", display: "q", description: "Quit application", action: "quit", command: "quit" },
     { key: "ctrl+c", display: "Ctrl+c", description: "Quit application", action: "quit" },
     // Auth commands (no keybindings, command-only)

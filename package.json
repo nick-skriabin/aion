@@ -10,10 +10,11 @@
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
-    "@nick-skriabin/glyph": "^0.1.42",
+    "@nick-skriabin/glyph": "^0.1.46",
     "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.38.3",
     "jotai": "^2.10.4",
+    "lunr": "^2.3.9",
     "luxon": "^3.5.0",
     "react": "^19.0.0",
     "react-error-boundary": "^6.1.0",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/iarna__toml": "^2.0.5",
+    "@types/lunr": "^2.3.7",
     "@types/luxon": "^3.4.2",
     "@types/react": "^19.0.0",
     "drizzle-kit": "^0.30.1"

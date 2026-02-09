@@ -10,6 +10,7 @@ import {
   openHelpAtom,
   openNotificationsAtom,
   newEventAtom,
+  openSearchAtom,
 } from "../state/actions.ts";
 import { KEYBIND_REGISTRY } from "../keybinds/registry.ts";
 
@@ -32,6 +33,7 @@ export function KeyboardHandler() {
   const openHelp = useSetAtom(openHelpAtom);
   const openNotifications = useSetAtom(openNotificationsAtom);
   const newEvent = useSetAtom(newEventAtom);
+  const openSearch = useSetAtom(openSearchAtom);
   
   const isHelpOpen = topOverlay?.kind === "help";
   const isNotificationsOpen = topOverlay?.kind === "notifications";
@@ -63,6 +65,11 @@ export function KeyboardHandler() {
       {/* Escape - from registry */}
       {escapeKey && hasOverlay && (
         <Keybind keypress={escapeKey} onPress={() => popOverlay()} />
+      )}
+      
+      {/* Search - / key */}
+      {!hasOverlay && (
+        <Keybind keypress="/" onPress={() => openSearch()} />
       )}
     </>
   );

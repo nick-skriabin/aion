@@ -11,9 +11,18 @@ import {
   timezoneAtom,
   messageAtom,
   messageVisibleAtom,
+  searchQueryAtom,
+  searchResultsAtom,
   type MessageType,
 } from "../state/atoms.ts";
-import { executeCommandAtom, popOverlayAtom, dismissMessageAtom } from "../state/actions.ts";
+import {
+  executeCommandAtom,
+  popOverlayAtom,
+  dismissMessageAtom,
+  updateSearchQueryAtom,
+  moveSearchSelectionAtom,
+  selectSearchResultAtom,
+} from "../state/actions.ts";
 import { getDisplayTitle } from "../domain/gcalEvent.ts";
 import { getEventStart, formatTime } from "../domain/time.ts";
 import { getAllCommands } from "../keybinds/registry.ts";
@@ -180,6 +189,61 @@ function CommandInput() {
   );
 }
 
+function SearchInput() {
+  const query = useAtomValue(searchQueryAtom);
+  const results = useAtomValue(searchResultsAtom);
+  const updateQuery = useSetAtom(updateSearchQueryAtom);
+  const moveSelection = useSetAtom(moveSearchSelectionAtom);
+  const selectResult = useSetAtom(selectSearchResultAtom);
+  const setFocus = useSetAtom(focusAtom);
+
+  const handleKeyPress = useCallback((key: { name: string; ctrl?: boolean; shift?: boolean; sequence?: string }) => {
+    const isCtrlP = key.sequence === "\x10";
+    const isCtrlN = key.sequence === "\x0e";
+
+    if (key.name === "escape") {
+      setFocus("timeline");
+      return true;
+    }
+    if (key.name === "return") {
+      selectResult();
+      return true;
+    }
+    if (key.name === "up" || isCtrlP) {
+      moveSelection("up");
+      return true;
+    }
+    if (key.name === "down" || isCtrlN) {
+      moveSelection("down");
+      return true;
+    }
+    return false;
+  }, [setFocus, selectResult, moveSelection]);
+
+  return (
+    <FocusScope trap>
+      <Box style={{ flexDirection: "row", flexGrow: 1, alignItems: "center" }}>
+        <Text style={{ color: theme.accent.primary, bold: true }}>/</Text>
+        <Input
+          key="search-input"
+          value={query}
+          placeholder="Search events..."
+          onChange={updateQuery}
+          onKeyPress={handleKeyPress}
+          autoFocus
+          style={{
+            flexGrow: 1,
+            color: theme.text.primary,
+          }}
+        />
+        <Text style={{ color: theme.text.dim }}>
+          {results.length > 0 ? `${results.length} results` : ""}
+        </Text>
+      </Box>
+    </FocusScope>
+  );
+}
+
 // Get color for message type
 function getMessageColor(type: MessageType): string {
   switch (type) {
@@ -293,6 +357,7 @@ function NextEvent() {
 export function StatusBar() {
   const focus = useAtomValue(focusAtom);
   const isCommandMode = focus === "command";
+  const isSearchMode = focus === "search";
 
   return (
     <>
@@ -311,9 +376,15 @@ export function StatusBar() {
           paddingX: 1,
         }}
       >
-        {/* Left side: Command input or next event */}
+        {/* Left side: Command input, Search input, or next event */}
         <Box style={{ flexGrow: 1, flexShrink: 1 }}>
-          {isCommandMode ? <CommandInput /> : <NextEvent />}
+          {isCommandMode ? (
+            <CommandInput />
+          ) : isSearchMode ? (
+            <SearchInput />
+          ) : (
+            <NextEvent />
+          )}
         </Box>
 
         {/* Right side: Notifications + Clock */}

@@ -14,8 +14,9 @@ import { NotificationsPanel } from "./NotificationsPanel.tsx";
 import { GotoDateDialog } from "./GotoDateDialog.tsx";
 import { MeetWithDialog } from "./MeetWithDialog.tsx";
 import { AccountsDialog } from "./AccountsDialog.tsx";
+import { SearchView } from "./SearchView.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
-import { loadEventsAtom, checkAuthStatusAtom } from "../state/actions.ts";
+import { loadEventsAtom, checkAuthStatusAtom, rebuildSearchIndexAtom } from "../state/actions.ts";
 import { getDisabledCalendars } from "../config/calendarSettings.ts";
 import { initDb } from "../db/db.ts";
 import { loadConfig } from "../config/config.ts";
@@ -47,6 +48,7 @@ function OverlayRenderer() {
             return <MeetWithDialog key={`meetWith-${index}`} />;
           case "accounts":
             return <AccountsDialog key={`accounts-${index}`} />;
+          // "search" is now handled inline below StatusBar
           // "command" is now handled inline by StatusBar
           default:
             return null;
@@ -65,6 +67,7 @@ function AppContent() {
   const setDisabledCalendars = useSetAtom(enabledCalendarsAtom);
   const setCalendarsLoaded = useSetAtom(enabledCalendarsLoadedAtom);
   const isLoggedIn = useAtomValue(isLoggedInAtom);
+  const rebuildSearchIndex = useSetAtom(rebuildSearchIndexAtom);
 
   // Initialize database and load events
   useEffect(() => {
@@ -82,6 +85,10 @@ function AppContent() {
         await checkAuthStatus();
 
         await loadEvents();
+
+        // Build search index after loading events
+        rebuildSearchIndex();
+
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to initialize");
@@ -160,7 +167,7 @@ function AppContent() {
             )}
           </Box>
           <Text style={{ color: theme.text.dim }}>
-            C-g:goto  C:calendars  ?:help
+            /:search  C-g:goto  C:calendars  ?:help
           </Text>
         </Box>
 
@@ -171,6 +178,9 @@ function AppContent() {
 
         {/* Status bar */}
         <StatusBar />
+
+        {/* Search results (inline, below status bar) */}
+        <SearchView />
 
         {/* Keyboard handler */}
         <KeyboardHandler />
