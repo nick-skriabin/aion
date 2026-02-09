@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text, useApp, Spinner, Keybind } from "@nick-skriabin/glyph";
+import { Box, Text, useApp, Spinner, Keybind, JumpNav } from "@nick-skriabin/glyph";
 import { Provider, useAtomValue, useSetAtom } from "jotai";
 import { DayView } from "./DayView.tsx";
 import { DetailsPanel } from "./DetailsPanel.tsx";
@@ -23,7 +23,7 @@ import { theme } from "./theme.ts";
 // Render overlays from stack - allows multiple overlays to be visible
 function OverlayRenderer() {
   const overlayStack = useAtomValue(overlayStackAtom);
-  
+
   return (
     <>
       {overlayStack.map((overlay, index) => {
@@ -64,22 +64,22 @@ function AppContent() {
   const setDisabledCalendars = useSetAtom(enabledCalendarsAtom);
   const setCalendarsLoaded = useSetAtom(enabledCalendarsLoadedAtom);
   const isLoggedIn = useAtomValue(isLoggedInAtom);
-  
+
   // Initialize database and load events
   useEffect(() => {
     async function init() {
       try {
         await loadConfig();
         await initDb();
-        
+
         // Load calendar settings from disk
         const disabled = await getDisabledCalendars();
         setDisabledCalendars(disabled);
         setCalendarsLoaded(true);
-        
+
         // Check auth status and start background sync if logged in
         await checkAuthStatus();
-        
+
         await loadEvents();
         setLoading(false);
       } catch (err) {
@@ -87,10 +87,10 @@ function AppContent() {
         setLoading(false);
       }
     }
-    
+
     init();
   }, [loadEvents, checkAuthStatus, setDisabledCalendars, setCalendarsLoaded]);
-  
+
   if (loading) {
     return (
       <Box
@@ -121,7 +121,7 @@ function AppContent() {
       </Box>
     );
   }
-  
+
   if (error) {
     return (
       <Box
@@ -137,50 +137,52 @@ function AppContent() {
       </Box>
     );
   }
-  
+
   return (
-    <Box
-      style={{
-        width: "100%",
-        height: "100%",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header */}
-      <Box style={{ flexDirection: "row", justifyContent: "space-between", paddingX: 1 }}>
-        <Box style={{ flexDirection: "row", gap: 2 }}>
-          <Text style={{ bold: true, color: theme.accent.primary }}>
-            Aion
+    <JumpNav>
+      <Box
+        style={{
+          width: "100%",
+          height: "100%",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
+        <Box style={{ flexDirection: "row", justifyContent: "space-between", paddingX: 1 }}>
+          <Box style={{ flexDirection: "row", gap: 2 }}>
+            <Text style={{ bold: true, color: theme.accent.primary }}>
+              Aion
+            </Text>
+            {isLoggedIn ? (
+              <Text style={{ color: theme.accent.success }}>●</Text>
+            ) : (
+              <Text style={{ color: theme.text.dim }}>○</Text>
+            )}
+          </Box>
+          <Text style={{ color: theme.text.dim }}>
+            C-g:goto  C:calendars  ?:help
           </Text>
-          {isLoggedIn ? (
-            <Text style={{ color: theme.accent.success }}>●</Text>
-          ) : (
-            <Text style={{ color: theme.text.dim }}>○</Text>
-          )}
         </Box>
-        <Text style={{ color: theme.text.dim }}>
-          C-g:goto  C:calendars  ?:help
-        </Text>
+
+        {/* Main content */}
+        <Box style={{ flexGrow: 1, flexShrink: 1, paddingX: 1, clip: true }}>
+          <DayView />
+        </Box>
+
+        {/* Status bar */}
+        <StatusBar />
+
+        {/* Keyboard handler */}
+        <KeyboardHandler />
+
+        {/* Quit keybind */}
+        <Keybind keypress="q" onPress={() => exit()} />
+        <Keybind keypress="ctrl+c" onPress={() => exit()} />
+
+        {/* Overlays - render based on stack, not just top */}
+        <OverlayRenderer />
       </Box>
-      
-      {/* Main content */}
-      <Box style={{ flexGrow: 1, flexShrink: 1, paddingX: 1, clip: true }}>
-        <DayView />
-      </Box>
-      
-      {/* Status bar */}
-      <StatusBar />
-      
-      {/* Keyboard handler */}
-      <KeyboardHandler />
-      
-      {/* Quit keybind */}
-      <Keybind keypress="q" onPress={() => exit()} />
-      <Keybind keypress="ctrl+c" onPress={() => exit()} />
-      
-      {/* Overlays - render based on stack, not just top */}
-      <OverlayRenderer />
-    </Box>
+    </JumpNav>
   );
 }
 

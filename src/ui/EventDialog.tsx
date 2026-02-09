@@ -12,6 +12,8 @@ import {
   useInput,
   useApp,
   createMask,
+  type Style,
+  JumpNav,
 } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
@@ -28,9 +30,20 @@ import {
 } from "../state/atoms.ts";
 import { popOverlayAtom, saveEventAtom } from "../state/actions.ts";
 import type { GCalEvent, EventType } from "../domain/gcalEvent.ts";
+import { WeekdayPicker } from "./WeekdayPicker.tsx";
 import { isAllDay as checkIsAllDay } from "../domain/gcalEvent.ts";
 import { parseTimeObject, toTimeObject, getLocalTimezone } from "../domain/time.ts";
 import { parseNaturalDate, formatParsedPreview, type ParsedDateTime } from "../domain/naturalDate.ts";
+import {
+  type RecurrenceRule,
+  type Frequency,
+  type EndType,
+  getDefaultRecurrenceRule,
+  buildRRule,
+  parseRRule,
+  getRRuleFromRecurrence,
+  formatRecurrenceRule,
+} from "../domain/recurrence.ts";
 import { theme } from "./theme.ts";
 
 // Input masks for date and time fields
@@ -43,9 +56,9 @@ const EVENT_TYPES: Array<{ label: string; value: EventType }> = [
   { label: "Focus time", value: "focusTime" },
 ];
 
-const DIALOG_WIDTH = 50;
+const DIALOG_WIDTH = 60;
 const LABEL_WIDTH = 8;
-const INPUT_WIDTH = 37; // DIALOG_WIDTH - padding(2) - border(2) - LABEL_WIDTH - gap(1)
+const INPUT_WIDTH = 47; // DIALOG_WIDTH - padding(2) - border(2) - LABEL_WIDTH - gap(1)
 
 interface OriginalValues {
   summary: string;
@@ -112,6 +125,10 @@ export function EventDialog() {
   const calendarsForAccount = useMemo(() => calendarsByAccount[accountEmail] ?? [], [calendarsByAccount, accountEmail]);
   const [calendarId, setCalendarId] = useState<string | null>(null);
 
+  // Recurrence
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>(getDefaultRecurrenceRule());
+
   // Natural language date input
   const [whenInput, setWhenInput] = useState("");
   const [whenPreview, setWhenPreview] = useState<ParsedDateTime | null>(null);
@@ -176,6 +193,19 @@ export function EventDialog() {
     setAttendees(attendeesVal);
     setAccountEmail(accountVal);
     setCalendarId(calendarVal);
+
+    // Initialize recurrence from existing event
+    const existingRRule = getRRuleFromRecurrence(dialogEvent.recurrence);
+    if (existingRRule) {
+      const parsed = parseRRule(existingRRule);
+      if (parsed) {
+        setIsRecurring(true);
+        setRecurrenceRule(parsed);
+      }
+    } else {
+      setIsRecurring(false);
+      setRecurrenceRule(getDefaultRecurrenceRule());
+    }
 
     // Clear when input on init
     setWhenInput("");
@@ -267,6 +297,12 @@ export function EventDialog() {
       end = toTimeObject(endDt, false, localTz);
     }
 
+    // Build recurrence array if recurring
+    let recurrence: string[] | undefined;
+    if (isRecurring) {
+      recurrence = [buildRRule(recurrenceRule)];
+    }
+
     const updatedEvent: Partial<GCalEvent> = {
       ...dialogEvent,
       summary: summary || "",
@@ -280,12 +316,13 @@ export function EventDialog() {
         : undefined,
       accountEmail: accountEmail || undefined,
       calendarId: calendarId || "primary",
+      recurrence,
     };
 
     setDialogEvent(updatedEvent);
     initializedEventIdRef.current = null; // Reset for next dialog open
     save();
-  }, [dialogEvent, isAllDay, startDate, endDate, startTime, endTime, summary, description, location, eventType, attendees, accountEmail, calendarId, setDialogEvent, save]);
+  }, [dialogEvent, isAllDay, startDate, endDate, startTime, endTime, summary, description, location, eventType, attendees, accountEmail, calendarId, isRecurring, recurrenceRule, setDialogEvent, save]);
 
   // Handler for Ctrl+S in inputs
   const handleInputKeyPress = useCallback((key: { name?: string; ctrl?: boolean }) => {
@@ -360,8 +397,13 @@ export function EventDialog() {
     bg: theme.input.background,
   };
 
-  const focusedInputStyle = {
+  const focusedInputStyle: Style = {
     bg: "#3a3a3a",
+    color: "white" as const,
+  };
+
+  const dropdownStyle: Style = {
+    bg: "#1a1a1a",
     color: "white" as const,
   };
 
@@ -436,6 +478,7 @@ export function EventDialog() {
                       highlightColor={theme.accent.primary}
                       style={{ bg: theme.input.background }}
                       focusedStyle={focusedInputStyle}
+                      dropdownStyle={dropdownStyle}
                     />
                   </Box>
                 )}
@@ -456,6 +499,7 @@ export function EventDialog() {
                     highlightColor={theme.accent.primary}
                     style={{ bg: theme.input.background }}
                     focusedStyle={focusedInputStyle}
+                    dropdownStyle={dropdownStyle}
                   />
                 </Box>
 
@@ -469,6 +513,7 @@ export function EventDialog() {
                     highlightColor={theme.accent.primary}
                     style={{ bg: theme.input.background }}
                     focusedStyle={focusedInputStyle}
+                    dropdownStyle={dropdownStyle}
                   />
                   <Checkbox
                     checked={isAllDay}
@@ -650,6 +695,116 @@ export function EventDialog() {
                       focusedStyle={{ color: theme.accent.primary }}
                     />
                   </Box>
+                )}
+
+                {/* Recurrence */}
+                <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                  <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>repeat</Text>
+                  <Checkbox
+                    checked={isRecurring}
+                    onChange={setIsRecurring}
+                    label="Repeating event"
+                    focusedStyle={{ color: theme.accent.primary }}
+                  />
+                </Box>
+
+                {isRecurring && (
+                  <>
+                    {/* Frequency */}
+                    <Box style={{ flexDirection: "row", gap: 1 }}>
+                      <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}> </Text>
+                      <Select
+                        items={[
+                          { label: "Daily", value: "DAILY" },
+                          { label: "Weekly", value: "WEEKLY" },
+                          { label: "Monthly", value: "MONTHLY" },
+                          { label: "Yearly", value: "YEARLY" },
+                        ]}
+                        value={recurrenceRule.frequency}
+                        onChange={(v) => setRecurrenceRule(r => ({ ...r, frequency: v as Frequency }))}
+                        highlightColor={theme.accent.primary}
+                        style={{ bg: theme.input.background, width: 10 }}
+                        focusedStyle={focusedInputStyle}
+                        dropdownStyle={dropdownStyle}
+                      />
+                      <Text style={{ color: theme.text.dim, width: 5 }}>every</Text>
+                      <Input
+                        value={String(recurrenceRule.interval)}
+                        type="number"
+                        onChange={(v) => {
+                          const num = parseInt(v, 10);
+                          if (!isNaN(num) && num > 0) {
+                            setRecurrenceRule(r => ({ ...r, interval: num }));
+                          }
+                        }}
+                        style={{ ...inputStyle, width: 5 }}
+                        focusedStyle={focusedInputStyle}
+                      />
+                    </Box>
+
+                    {/* Weekdays for weekly frequency */}
+                    {recurrenceRule.frequency === "WEEKLY" && (
+                      <Box style={{ flexDirection: "row", gap: 1 }}>
+                        <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>on</Text>
+                        <WeekdayPicker
+                          value={recurrenceRule.weekdays || []}
+                          onChange={(weekdays) => setRecurrenceRule(r => ({ ...r, weekdays }))}
+                        />
+                      </Box>
+                    )}
+
+                    {/* End condition */}
+                    <Box style={{ flexDirection: "row", gap: 1 }}>
+                      <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>ends</Text>
+                      <Select
+                        items={[
+                          { label: "Never", value: "never" },
+                          { label: "After", value: "count" },
+                          { label: "On date", value: "until" },
+                        ]}
+                        value={recurrenceRule.endType}
+                        onChange={(v) => setRecurrenceRule(r => ({ ...r, endType: v as EndType }))}
+                        highlightColor={theme.accent.primary}
+                        style={{ bg: theme.input.background }}
+                        focusedStyle={focusedInputStyle}
+                        dropdownStyle={dropdownStyle}
+                      />
+                      {recurrenceRule.endType === "count" && (
+                        <>
+                          <Input
+                            value={String(recurrenceRule.count || 10)}
+                            onChange={(v) => {
+                              const num = parseInt(v, 10);
+                              if (!isNaN(num) && num > 0) {
+                                setRecurrenceRule(r => ({ ...r, count: num }));
+                              }
+                            }}
+                            style={{ ...inputStyle, width: 4 }}
+                            focusedStyle={focusedInputStyle}
+                          />
+                          <Text style={{ color: theme.text.dim }}>times</Text>
+                        </>
+                      )}
+                      {recurrenceRule.endType === "until" && (
+                        <Input
+                          value={recurrenceRule.until || ""}
+                          onChange={(v) => setRecurrenceRule(r => ({ ...r, until: v }))}
+                          placeholder="YYYY-MM-DD"
+                          onBeforeChange={dateMask}
+                          style={{ ...inputStyle, width: 12 }}
+                          focusedStyle={focusedInputStyle}
+                        />
+                      )}
+                    </Box>
+
+                    {/* Preview */}
+                    <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                      <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}> </Text>
+                      <Text style={{ color: theme.accent.success, dim: true }}>
+                        → {formatRecurrenceRule(recurrenceRule)}
+                      </Text>
+                    </Box>
+                  </>
                 )}
               </Box>
             </ScrollView>

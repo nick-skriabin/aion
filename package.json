@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
-    "@nick-skriabin/glyph": "^0.1.24",
+    "@nick-skriabin/glyph": "^0.1.38",
     "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.38.3",
     "jotai": "^2.10.4",
