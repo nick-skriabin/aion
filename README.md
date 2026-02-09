@@ -65,7 +65,9 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 | **💾 Local-First** | SQLite database, your data stays yours |
 | **🔔 Notifications** | Track pending invites at a glance |
 | **📝 Command Palette** | Quick access to all actions with fuzzy search |
+| **🔍 Event Search** | Find events by title or description with `/` |
 | **🗓️ Natural Language Dates** | Type "tomorrow 3pm" or "next friday for 2 hours" |
+| **🔁 Recurring Events** | Create and edit events with daily/weekly/monthly/yearly recurrence |
 | **❓ Context Help** | Press `?` anywhere to see available keybindings |
 | **🚀 Fast** | Built with Bun and React — instant startup |
 
@@ -191,6 +193,7 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 
 | Key | Action |
 |-----|--------|
+| `/` | Search events |
 | `:` | Open command palette |
 | `?` | Show help (context-aware) |
 | `N` | Open notifications |
@@ -235,6 +238,12 @@ Open the command palette with `:` and type a command:
 | Command | Action |
 |---------|--------|
 | `meet` | Find free slots with other people |
+
+### Search
+
+| Command | Action |
+|---------|--------|
+| `search` | Search events by title/description |
 
 ### General
 
@@ -360,16 +369,17 @@ All data is stored locally in `~/.aion/`:
 - [x] Timezone handling
 - [x] Background sync (30s interval)
 - [x] Accounts management dialog
+- [x] Recurring event creation/editing
+- [x] Search events by title/description
 
 ### 🚧 In Progress
 
+- [ ] Multi-column day view (1-5 columns)
 - [ ] Week view
 - [ ] Month view
 
 ### 📋 Planned
 
-- [ ] Recurring event creation/editing
-- [ ] Search / filtering
 - [ ] Import/export (ICS)
 - [ ] CalDAV support
 - [ ] Offline mode improvements
