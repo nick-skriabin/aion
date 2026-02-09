@@ -19,9 +19,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/nick-skriabin/aion/releases/latest"><img src="https://img.shields.io/github/v/release/nick-skriabin/aion?label=Release&color=green" alt="Latest Release"></a>
+  <a href="https://github.com/nick-skriabin/aion/releases/latest"><img src="https://img.shields.io/github/downloads/nick-skriabin/aion/total?label=Downloads&color=blue" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun&logoColor=black" alt="Bun">
-  <img src="https://img.shields.io/badge/TypeScript-First-3178c6?logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/React-Terminal-61dafb?logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License">
 </p>
 
