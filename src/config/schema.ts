@@ -81,10 +81,16 @@ const GoogleSchema = z.object({
   clientSecret: z.string().optional(),
 }).default({});
 
+// View configuration
+const ViewSchema = z.object({
+  columns: z.number().min(1).max(5).default(3),
+}).default({});
+
 // Full config schema
 export const ConfigSchema = z.object({
   theme: ThemeSchema,
   google: GoogleSchema,
+  view: ViewSchema,
 }).default({});
 
 export type Config = z.infer<typeof ConfigSchema>;
