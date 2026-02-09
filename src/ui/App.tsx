@@ -16,7 +16,7 @@ import { MeetWithDialog } from "./MeetWithDialog.tsx";
 import { AccountsDialog } from "./AccountsDialog.tsx";
 import { SearchView } from "./SearchView.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
-import { loadEventsAtom, checkAuthStatusAtom, rebuildSearchIndexAtom } from "../state/actions.ts";
+import { loadEventsAtom, checkAuthStatusAtom, rebuildSearchIndexAtom, loadCalendarCacheAtom } from "../state/actions.ts";
 import { getDisabledCalendars } from "../config/calendarSettings.ts";
 import { initDb } from "../db/db.ts";
 import { loadConfig } from "../config/config.ts";
@@ -60,46 +60,49 @@ function OverlayRenderer() {
 
 function AppContent() {
   const { exit } = useApp();
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadEvents = useSetAtom(loadEventsAtom);
   const checkAuthStatus = useSetAtom(checkAuthStatusAtom);
+  const loadCalendarCache = useSetAtom(loadCalendarCacheAtom);
   const setDisabledCalendars = useSetAtom(enabledCalendarsAtom);
   const setCalendarsLoaded = useSetAtom(enabledCalendarsLoadedAtom);
   const isLoggedIn = useAtomValue(isLoggedInAtom);
   const rebuildSearchIndex = useSetAtom(rebuildSearchIndexAtom);
 
-  // Initialize database and load events
+  // Fast init: config + db + cached data, then show UI immediately
   useEffect(() => {
-    async function init() {
+    async function fastInit() {
       try {
+        // Critical path: config, db, and cached calendars (for colors)
         await loadConfig();
         await initDb();
 
-        // Load calendar settings from disk
-        const disabled = await getDisabledCalendars();
+        // Load calendar cache + events from DB in parallel (all local, instant)
+        const [disabled] = await Promise.all([
+          getDisabledCalendars(),
+          loadCalendarCache(), // Cached calendar colors for instant render
+          loadEvents(), // Events from SQLite
+        ]);
         setDisabledCalendars(disabled);
         setCalendarsLoaded(true);
+        setReady(true);
 
-        // Check auth status and start background sync if logged in
-        await checkAuthStatus();
+        // Background: check auth, sync, refresh calendars from API
+        checkAuthStatus(); // Will update calendars from API and save to cache
 
-        await loadEvents();
-
-        // Build search index after loading events
+        // Search index built last (non-blocking)
         rebuildSearchIndex();
-
-        setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to initialize");
-        setLoading(false);
+        setReady(true);
       }
     }
 
-    init();
-  }, [loadEvents, checkAuthStatus, setDisabledCalendars, setCalendarsLoaded]);
+    fastInit();
+  }, [loadEvents, checkAuthStatus, loadCalendarCache, setDisabledCalendars, setCalendarsLoaded]);
 
-  if (loading) {
+  if (!ready) {
     return (
       <Box
         style={{

@@ -1005,17 +1005,22 @@ export const loginAtom = atom(null, async (get, set) => {
     // Fetch calendars for all accounts
     try {
       const { getAllCalendars } = await import("../api/calendar.ts");
+      const { saveCalendarCache } = await import("../config/calendarCache.ts");
       appLogger.debug("loginAtom: Fetching calendars...");
       const calendars = await getAllCalendars();
       appLogger.info(`loginAtom: Fetched ${calendars.length} calendars`);
-      set(calendarsAtom, calendars.map((cal) => ({
+      
+      const calendarData = calendars.map((cal) => ({
         id: cal.id,
         summary: cal.summary,
         primary: cal.primary,
         accountEmail: cal.accountEmail || "",
         backgroundColor: cal.backgroundColor,
         foregroundColor: cal.foregroundColor,
-      })));
+      }));
+      
+      set(calendarsAtom, calendarData);
+      await saveCalendarCache(calendarData);
     } catch (error) {
       appLogger.error("loginAtom: Failed to fetch calendars", { error });
     }
@@ -1178,16 +1183,21 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     // Fetch and store calendars for all accounts
     try {
       const { getAllCalendars } = await import("../api/calendar.ts");
+      const { saveCalendarCache } = await import("../config/calendarCache.ts");
       const calendars = await getAllCalendars();
       appLogger.debug(`syncAtom: Fetched ${calendars.length} calendars`);
-      set(calendarsAtom, calendars.map((cal) => ({
+      
+      const calendarData = calendars.map((cal) => ({
         id: cal.id,
         summary: cal.summary,
         primary: cal.primary,
         accountEmail: cal.accountEmail || "",
         backgroundColor: cal.backgroundColor,
         foregroundColor: cal.foregroundColor,
-      })));
+      }));
+      
+      set(calendarsAtom, calendarData);
+      await saveCalendarCache(calendarData);
     } catch (error) {
       appLogger.error("syncAtom: Failed to fetch calendars", { error });
     }
@@ -1397,9 +1407,26 @@ export const backgroundSyncAtom = atom(null, async (get, set) => {
   await set(syncAtom, { silent: true });
 });
 
-// Fetch calendars for all accounts
+// Load calendars from local cache (instant)
+export const loadCalendarCacheAtom = atom(null, async (get, set) => {
+  const { loadCalendarCache } = await import("../config/calendarCache.ts");
+  const cached = await loadCalendarCache();
+  if (cached.length > 0) {
+    set(calendarsAtom, cached.map((cal) => ({
+      id: cal.id,
+      summary: cal.summary,
+      primary: cal.primary,
+      accountEmail: cal.accountEmail,
+      backgroundColor: cal.backgroundColor,
+    })));
+    appLogger.debug(`Loaded ${cached.length} calendars from cache`);
+  }
+});
+
+// Fetch calendars for all accounts (and save to cache)
 export const fetchCalendarsAtom = atom(null, async (get, set) => {
   const { getAllCalendars } = await import("../api/calendar.ts");
+  const { saveCalendarCache } = await import("../config/calendarCache.ts");
   
   try {
     appLogger.debug("fetchCalendarsAtom: Fetching calendars...");
@@ -1407,14 +1434,20 @@ export const fetchCalendarsAtom = atom(null, async (get, set) => {
     appLogger.info(`fetchCalendarsAtom: Fetched ${calendars.length} calendars`, { 
       calendars: calendars.map(c => ({ id: c.id, summary: c.summary, account: c.accountEmail }))
     });
-    set(calendarsAtom, calendars.map((cal) => ({
+    
+    const calendarData = calendars.map((cal) => ({
       id: cal.id,
       summary: cal.summary,
       primary: cal.primary,
       accountEmail: cal.accountEmail || "",
       backgroundColor: cal.backgroundColor,
       foregroundColor: cal.foregroundColor,
-    })));
+    }));
+    
+    set(calendarsAtom, calendarData);
+    
+    // Save to cache for instant load next time
+    await saveCalendarCache(calendarData);
   } catch (error) {
     appLogger.error("fetchCalendarsAtom: Failed to fetch calendars", { error });
   }
@@ -1442,17 +1475,22 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
     // Fetch calendars for all accounts
     try {
       const { getAllCalendars } = await import("../api/calendar.ts");
+      const { saveCalendarCache } = await import("../config/calendarCache.ts");
       appLogger.debug("checkAuthStatusAtom: Fetching calendars...");
       const calendars = await getAllCalendars();
       appLogger.info(`checkAuthStatusAtom: Fetched ${calendars.length} calendars`);
-      set(calendarsAtom, calendars.map((cal) => ({
+      
+      const calendarData = calendars.map((cal) => ({
         id: cal.id,
         summary: cal.summary,
         primary: cal.primary,
         accountEmail: cal.accountEmail || "",
         backgroundColor: cal.backgroundColor,
         foregroundColor: cal.foregroundColor,
-      })));
+      }));
+      
+      set(calendarsAtom, calendarData);
+      await saveCalendarCache(calendarData);
     } catch (error) {
       appLogger.error("checkAuthStatusAtom: Failed to fetch calendars", { error });
     }
