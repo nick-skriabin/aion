@@ -85,17 +85,17 @@ jobs:
           
           echo "Downloading binaries and calculating checksums..."
           
-          # Function to download and get SHA256
+          # Function to download and get SHA256 (debug output to stderr)
           get_sha256() {
             local url="$1"
             local name="$2"
-            echo "Downloading ${name}..."
+            echo "Downloading ${name}..." >&2
             SHA=$(curl -sfL "${url}" | sha256sum | cut -d' ' -f1)
             if [ -z "$SHA" ] || [ "$SHA" = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ]; then
-              echo "Error: Failed to download ${name} or file is empty"
+              echo "Error: Failed to download ${name} or file is empty" >&2
               exit 1
             fi
-            echo "${name}: ${SHA}"
+            echo "${name}: ${SHA}" >&2
             echo "$SHA"
           }
           
