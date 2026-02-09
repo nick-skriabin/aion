@@ -416,6 +416,7 @@ export const performSaveAtom = atom(null, async (get, set) => {
             end: dialogEvent.end,
             attendees: dialogEvent.attendees,
             eventType: dialogEvent.eventType,
+            recurrence: dialogEvent.recurrence,
           },
           dialogEvent.calendarId || "primary",
           dialogEvent.accountEmail,
@@ -470,6 +471,7 @@ export const performSaveAtom = atom(null, async (get, set) => {
               end: dialogEvent.end,
               attendees: dialogEvent.attendees,
               eventType: dialogEvent.eventType,
+              recurrence: dialogEvent.recurrence,
             },
             dialogEvent.calendarId || "primary",
             accountEmail,
@@ -578,10 +580,21 @@ export const continueDeleteWithNotifyAtom = atom(
 // Confirm delete
 export const confirmDeleteAtom = atom(null, async (get, set) => {
   const pending = get(pendingActionAtom);
-  if (!pending) return;
+  if (!pending) {
+    set(popOverlayAtom);
+    return;
+  }
   
   const event = get(eventsAtom)[pending.eventId];
-  if (!event) return;
+  if (!event) {
+    set(pendingActionAtom, null);
+    set(popOverlayAtom);
+    return;
+  }
+  
+  // Close overlay and clear state first
+  set(popOverlayAtom);
+  set(selectedEventIdAtom, null);
   
   const { isLoggedInAtom } = await import("./atoms.ts");
   const isLoggedIn = get(isLoggedInAtom);
@@ -596,30 +609,63 @@ export const confirmDeleteAtom = atom(null, async (get, set) => {
         pending.eventId,
         event.calendarId || "primary",
         pending.notifyAttendees ?? false,
-        event.accountEmail
+        event.accountEmail,
+        pending.scope,
+        event.recurringEventId
       );
-      set(showMessageAtom, { text: "Event deleted", type: "success" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       set(showMessageAtom, { text: `Delete failed: ${message}`, type: "error" });
       set(pendingActionAtom, null);
-      set(popOverlayAtom);
       return; // Don't delete locally if API failed
     }
   }
   
-  // Delete locally
-  await eventsRepo.delete(pending.eventId);
+  // Delete locally - do state update first, then persist
+  const eventId = pending.eventId;
+  const recurringId = event.recurringEventId;
+  const deleteAll = pending.scope === "all" && recurringId;
   
-  set(eventsAtom, (prev) => {
-    const next = { ...prev };
-    delete next[pending.eventId];
-    return next;
-  });
+  // Update state immediately
+  if (deleteAll) {
+    set(eventsAtom, (prev) => {
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        if (next[id]?.recurringEventId === recurringId) {
+          delete next[id];
+        }
+      }
+      return next;
+    });
+  } else {
+    set(eventsAtom, (prev) => {
+      const next = { ...prev };
+      delete next[eventId];
+      return next;
+    });
+  }
   
-  set(selectedEventIdAtom, null);
+  // Then persist to database
+  try {
+    if (deleteAll) {
+      const allEvents = await eventsRepo.getAll();
+      const toDelete = allEvents
+        .filter(e => e.recurringEventId === recurringId)
+        .map(e => e.id);
+      
+      for (const id of toDelete) {
+        await eventsRepo.delete(id);
+      }
+    } else {
+      await eventsRepo.delete(eventId);
+    }
+  } catch (error) {
+    // Log error but state is already updated
+    console.error("Database delete failed:", error);
+  }
+  
   set(pendingActionAtom, null);
-  set(popOverlayAtom);
+  set(showMessageAtom, { text: "Event deleted", type: "success" });
 });
 
 // Cancel delete

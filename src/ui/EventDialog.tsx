@@ -333,8 +333,6 @@ export function EventDialog() {
     return false;
   }, [handleSave]);
 
-  if (!dialogEvent) return null;
-
   const addAttendee = () => {
     const email = attendeesInput.trim();
     if (email && email.includes("@") && !attendees.includes(email)) {
@@ -406,6 +404,10 @@ export function EventDialog() {
     bg: "#1a1a1a",
     color: "white" as const,
   };
+
+  if (!dialogEvent) {
+    return null;
+  }
 
   return (
     <Portal zIndex={20}>

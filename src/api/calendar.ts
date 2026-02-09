@@ -42,6 +42,11 @@ async function calendarFetch<T>(
     throw new Error(`Calendar API error (${response.status}): ${error}`);
   }
   
+  // Handle 204 No Content (e.g., DELETE requests)
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
+  
   return response.json();
 }
 
@@ -687,15 +692,28 @@ export async function updateEvent(
 /**
  * Delete an event
  * @param eventId - The composite ID (accountEmail:googleId) or just googleId for local events
+ * @param calendarId - Calendar ID
+ * @param sendNotifications - Whether to notify attendees
+ * @param accountEmail - Account email for multi-account support
+ * @param scope - For recurring events: "this", "following", or "all"
+ * @param recurringEventId - The master recurring event ID (for "all" scope)
  */
 export async function deleteEvent(
   eventId: string,
   calendarId = "primary",
   sendNotifications = false,
-  accountEmail?: string
+  accountEmail?: string,
+  scope?: "this" | "following" | "all",
+  recurringEventId?: string
 ): Promise<void> {
+  // For "all" recurring events, delete the master event
+  let targetId = eventId;
+  if (scope === "all" && recurringEventId) {
+    targetId = recurringEventId;
+  }
+  
   // Extract the Google ID from composite ID for API call
-  const googleId = extractGoogleId(eventId);
+  const googleId = extractGoogleId(targetId);
   
   const params = new URLSearchParams({
     sendNotifications: String(sendNotifications),

@@ -17,7 +17,6 @@ import {
   openDetailsAtom,
   openEditDialogAtom,
   proposeNewTimeAtom,
-  initiateDeleteAtom,
   openCommandAtom,
   jumpToNowAtom,
   moveEventSelectionAtom,
@@ -28,6 +27,7 @@ import {
   openGotoDialogAtom,
   openMeetWithDialogAtom,
 } from "../state/actions.ts";
+import { useDeleteEvent } from "./hooks/useDeleteEvent.tsx";
 import { formatDayHeader, isToday, getNowMinutes, formatTime, getEventStart, getEventEnd, getLocalTimezone } from "../domain/time.ts";
 import { getDisplayTitle, type ResponseStatus } from "../domain/gcalEvent.ts";
 import { findNearestEvent } from "../domain/layout.ts";
@@ -126,7 +126,7 @@ function TimelineKeybinds() {
   const openDetails = useSetAtom(openDetailsAtom);
   const openEditDialog = useSetAtom(openEditDialogAtom);
   const proposeNewTime = useSetAtom(proposeNewTimeAtom);
-  const initiateDelete = useSetAtom(initiateDeleteAtom);
+  const { deleteEvent } = useDeleteEvent();
   const openCommand = useSetAtom(openCommandAtom);
   const jumpToNow = useSetAtom(jumpToNowAtom);
   const moveEventSelection = useSetAtom(moveEventSelectionAtom);
@@ -149,10 +149,10 @@ function TimelineKeybinds() {
     openDetails: () => openDetails(),
     editEvent: () => openEditDialog(),
     proposeNewTime: () => proposeNewTime(),
-    deleteEvent: () => initiateDelete(),
+    deleteEvent: () => deleteEvent(),
     openCommand: () => openCommand(),
     toggleFocus: () => toggleFocus(),
-  }), [moveEventSelection, jumpToNow, openDetails, openEditDialog, proposeNewTime, initiateDelete, openCommand, toggleFocus]);
+  }), [moveEventSelection, jumpToNow, openDetails, openEditDialog, proposeNewTime, deleteEvent, openCommand, toggleFocus]);
   
   // Global keybind handlers (need to be handled here due to FocusScope trap)
   const globalHandlers = useMemo(() => ({

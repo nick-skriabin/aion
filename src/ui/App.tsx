@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text, useApp, Spinner, Keybind, JumpNav } from "@nick-skriabin/glyph";
+import { Box, Text, useApp, Keybind, JumpNav, DialogHost } from "@nick-skriabin/glyph";
+import { Loader } from "./Loader.tsx";
 import { Provider, useAtomValue, useSetAtom } from "jotai";
 import { DayView } from "./DayView.tsx";
 import { DetailsPanel } from "./DetailsPanel.tsx";
@@ -115,8 +116,7 @@ function AppContent() {
           </Text>
         </Box>
         <Box style={{ paddingTop: 1 }}>
-          <Spinner label="" style={{ color: theme.accent.primary }} />
-          <Text style={{ color: theme.text.dim }}> Loading...</Text>
+          <Loader label="Loading..." />
         </Box>
       </Box>
     );
@@ -189,7 +189,9 @@ function AppContent() {
 export function App() {
   return (
     <Provider>
-      <AppContent />
+      <DialogHost>
+        <AppContent />
+      </DialogHost>
     </Provider>
   );
 }

@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import { Box, Text, Portal, ScrollView, FocusScope, Keybind } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { selectedEventAtom, timezoneAtom, focusAtom, calendarColorMapAtom, getCalendarColor, calendarsAtom } from "../state/atoms.ts";
-import { updateAttendanceAtom, openEditDialogAtom, initiateDeleteAtom, proposeNewTimeAtom } from "../state/actions.ts";
+import { updateAttendanceAtom, openEditDialogAtom, proposeNewTimeAtom } from "../state/actions.ts";
+import { useDeleteEvent } from "./hooks/useDeleteEvent.tsx";
 import { ScopedKeybinds } from "../keybinds/useKeybinds.tsx";
 import {
   getDisplayTitle,
@@ -157,7 +158,7 @@ export function DetailsPanel() {
   const calendars = useAtomValue(calendarsAtom);
   const updateAttendance = useSetAtom(updateAttendanceAtom);
   const openEditDialog = useSetAtom(openEditDialogAtom);
-  const initiateDelete = useSetAtom(initiateDeleteAtom);
+  const { deleteEvent } = useDeleteEvent();
   const proposeNewTime = useSetAtom(proposeNewTimeAtom);
   
   // Toggle between local and original timezone
@@ -221,10 +222,10 @@ export function DetailsPanel() {
     tentativeInvite: () => updateAttendance({ eventId: event.id, status: "tentative" }),
     editEvent: () => openEditDialog(),
     proposeNewTime: () => proposeNewTime(),
-    deleteEvent: () => initiateDelete(),
+    deleteEvent: () => deleteEvent(),
     openMeetingLink: meetingLink ? () => Bun.spawn(["open", meetingLink]) : undefined,
     toggleTimezone: hasOriginalTz ? toggleTimezone : undefined,
-  }), [event.id, meetingLink, updateAttendance, openEditDialog, proposeNewTime, initiateDelete, hasOriginalTz, showOriginalTz]);
+  }), [event.id, meetingLink, updateAttendance, openEditDialog, proposeNewTime, deleteEvent, hasOriginalTz, showOriginalTz]);
   
   return (
     <Portal zIndex={10}>

@@ -5,7 +5,8 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Box, Text, Input, Keybind, Portal, Spinner } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Keybind, Portal } from "@nick-skriabin/glyph";
+import { Loader } from "./Loader.tsx";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import {
@@ -461,9 +462,8 @@ function SlotsView({
 
       {/* Main content: slots list + visualizer */}
       {loading ? (
-        <Box style={{ flexDirection: "row", alignItems: "center", paddingY: 1 }}>
-          <Spinner label="" style={{ color: theme.accent.primary }} />
-          <Text style={{ color: theme.text.dim }}> Checking availability...</Text>
+        <Box style={{ paddingY: 1 }}>
+          <Loader label="Checking availability..." />
         </Box>
       ) : slots.length === 0 ? (
         <Text style={{ color: theme.text.dim }}>No available slots found.</Text>

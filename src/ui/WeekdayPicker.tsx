@@ -26,6 +26,16 @@ interface WeekdayPickerProps {
 export function WeekdayPicker({ value, onChange }: WeekdayPickerProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
 
+  const toggleDay = () => {
+    const day = WEEKDAYS[focusedIndex].key;
+    const isSelected = value.includes(day);
+    if (isSelected) {
+      onChange(value.filter((d) => d !== day));
+    } else {
+      onChange([...value, day]);
+    }
+  };
+
   const { ref, isFocused } = useFocusable({
     onKeyPress: (key) => {
       if (key.name === "left" || key.name === "h") {
@@ -36,14 +46,9 @@ export function WeekdayPicker({ value, onChange }: WeekdayPickerProps) {
         setFocusedIndex((i) => Math.min(WEEKDAYS.length - 1, i + 1));
         return true;
       }
-      if (key.name === "space" || key.name === "return") {
-        const day = WEEKDAYS[focusedIndex].key;
-        const isSelected = value.includes(day);
-        if (isSelected) {
-          onChange(value.filter((d) => d !== day));
-        } else {
-          onChange([...value, day]);
-        }
+      // Try multiple ways to detect space/enter
+      if (key.name === "space" || key.name === "return" || key.sequence === " ") {
+        toggleDay();
         return true;
       }
       return false;
