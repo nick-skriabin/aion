@@ -1,0 +1,161 @@
+# This file goes in your homebrew-tap repository:
+# https://github.com/nick-skriabin/homebrew-tap/.github/workflows/update-formula.yml
+#
+# Repository structure:
+#   homebrew-tap/
+#   ├── .github/workflows/update-formula.yml  (this file)
+#   └── Formula/aion.rb
+
+name: Update Formula
+
+on:
+  repository_dispatch:
+    types: [update-formula]
+  
+  # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (without v prefix)'
+        required: true
+      sha256_darwin_arm64:
+        description: 'SHA256 for darwin-arm64'
+        required: true
+      sha256_darwin_x64:
+        description: 'SHA256 for darwin-x64'
+        required: true
+      sha256_linux_arm64:
+        description: 'SHA256 for linux-arm64'
+        required: true
+      sha256_linux_x64:
+        description: 'SHA256 for linux-x64'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-aion:
+    name: Update Aion Formula
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.client_payload.formula == 'aion'
+    
+    steps:
+      - name: Checkout tap repository
+        uses: actions/checkout@v4
+      
+      - name: Set variables
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "sha_darwin_arm64=${{ github.event.inputs.sha256_darwin_arm64 }}" >> $GITHUB_OUTPUT
+            echo "sha_darwin_x64=${{ github.event.inputs.sha256_darwin_x64 }}" >> $GITHUB_OUTPUT
+            echo "sha_linux_arm64=${{ github.event.inputs.sha256_linux_arm64 }}" >> $GITHUB_OUTPUT
+            echo "sha_linux_x64=${{ github.event.inputs.sha256_linux_x64 }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+            echo "sha_darwin_arm64=${{ github.event.client_payload.sha256_darwin_arm64 }}" >> $GITHUB_OUTPUT
+            echo "sha_darwin_x64=${{ github.event.client_payload.sha256_darwin_x64 }}" >> $GITHUB_OUTPUT
+            echo "sha_linux_arm64=${{ github.event.client_payload.sha256_linux_arm64 }}" >> $GITHUB_OUTPUT
+            echo "sha_linux_x64=${{ github.event.client_payload.sha256_linux_x64 }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate inputs
+        run: |
+          VERSION="${{ steps.vars.outputs.version }}"
+          SHA_DARWIN_ARM64="${{ steps.vars.outputs.sha_darwin_arm64 }}"
+          SHA_DARWIN_X64="${{ steps.vars.outputs.sha_darwin_x64 }}"
+          SHA_LINUX_ARM64="${{ steps.vars.outputs.sha_linux_arm64 }}"
+          SHA_LINUX_X64="${{ steps.vars.outputs.sha_linux_x64 }}"
+          
+          # Validate version format
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Invalid version format: $VERSION"
+            exit 1
+          fi
+          
+          # Validate SHA256 format (64 hex characters)
+          for sha in "$SHA_DARWIN_ARM64" "$SHA_DARWIN_X64" "$SHA_LINUX_ARM64" "$SHA_LINUX_X64"; do
+            if ! [[ "$sha" =~ ^[a-f0-9]{64}$ ]]; then
+              echo "Error: Invalid SHA256 format: $sha"
+              exit 1
+            fi
+          done
+          
+          echo "All inputs validated successfully"
+          echo "Version: $VERSION"
+      
+      - name: Ensure Formula directory exists
+        run: mkdir -p Formula
+      
+      - name: Update Aion formula
+        run: |
+          cat > Formula/aion.rb << 'FORMULA_EOF'
+          class Aion < Formula
+            desc "Terminal calendar client with vim-style keybindings"
+            homepage "https://github.com/nick-skriabin/aion"
+            version "${{ steps.vars.outputs.version }}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/nick-skriabin/aion/releases/download/v#{version}/aion-darwin-arm64"
+                sha256 "${{ steps.vars.outputs.sha_darwin_arm64 }}"
+              end
+              on_intel do
+                url "https://github.com/nick-skriabin/aion/releases/download/v#{version}/aion-darwin-x64"
+                sha256 "${{ steps.vars.outputs.sha_darwin_x64 }}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/nick-skriabin/aion/releases/download/v#{version}/aion-linux-arm64"
+                sha256 "${{ steps.vars.outputs.sha_linux_arm64 }}"
+              end
+              on_intel do
+                url "https://github.com/nick-skriabin/aion/releases/download/v#{version}/aion-linux-x64"
+                sha256 "${{ steps.vars.outputs.sha_linux_x64 }}"
+              end
+            end
+
+            def install
+              bin.install Dir["*"].first => "aion"
+            end
+
+            test do
+              assert_predicate bin/"aion", :executable?
+            end
+          end
+          FORMULA_EOF
+      
+      - name: Show formula
+        run: cat Formula/aion.rb
+      
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add Formula/aion.rb
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "aion ${{ steps.vars.outputs.version }}"
+            git push
+            echo "Formula updated to version ${{ steps.vars.outputs.version }}"
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## Formula Updated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.vars.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "brew tap nick-skriabin/tap" >> $GITHUB_STEP_SUMMARY
+          echo "brew install aion" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

@@ -1,10 +1,36 @@
 {
   "name": "aion",
+  "version": "0.1.0",
+  "description": "Terminal calendar client with vim-style keybindings",
+  "author": "Nick Skriabin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nick-skriabin/aion.git"
+  },
+  "homepage": "https://github.com/nick-skriabin/aion",
+  "keywords": [
+    "calendar",
+    "terminal",
+    "tui",
+    "vim",
+    "google-calendar",
+    "cli"
+  ],
   "module": "src/index.tsx",
   "type": "module",
-  "private": true,
+  "bin": {
+    "aion": "./dist/aion"
+  },
   "scripts": {
     "dev": "bun run src/index.tsx",
+    "build": "bun build --compile src/index.tsx --outfile dist/aion",
+    "build:linux-x64": "bun build --compile --target=bun-linux-x64 src/index.tsx --outfile dist/aion-linux-x64",
+    "build:linux-arm64": "bun build --compile --target=bun-linux-arm64 src/index.tsx --outfile dist/aion-linux-arm64",
+    "build:darwin-x64": "bun build --compile --target=bun-darwin-x64 src/index.tsx --outfile dist/aion-darwin-x64",
+    "build:darwin-arm64": "bun build --compile --target=bun-darwin-arm64 src/index.tsx --outfile dist/aion-darwin-arm64",
+    "build:windows-x64": "bun build --compile --target=bun-windows-x64 src/index.tsx --outfile dist/aion-windows-x64.exe",
+    "build:all": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:darwin-x64 && bun run build:darwin-arm64 && bun run build:windows-x64",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts"
   },

@@ -1,0 +1,227 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Matches v0.0.0, v1.2.3, etc.
+
+permissions:
+  contents: write
+
+env:
+  GITHUB_REPO: nick-skriabin/aion
+  HOMEBREW_TAP: nick-skriabin/homebrew-tap
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            artifact: aion-linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            artifact: aion-linux-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+            artifact: aion-darwin-x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+            artifact: aion-darwin-arm64
+          - os: windows-latest
+            target: bun-windows-x64
+            artifact: aion-windows-x64.exe
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      
+      - name: Build binary
+        run: bun build --compile --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }}
+      
+      - name: Make executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x ${{ matrix.artifact }}
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            cp -r "$dir"* release/
+          done
+          echo "Release files:"
+          ls -la release/
+      
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > checksums.txt
+          cat checksums.txt
+      
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Aion v${{ steps.version.outputs.version }}
+          body: |
+            ## Installation
+            
+            ### Homebrew (macOS/Linux)
+            ```bash
+            brew tap nick-skriabin/tap
+            brew install aion
+            ```
+            
+            ### Manual Download
+            Download the appropriate binary for your platform below.
+            
+            | Platform | Binary |
+            |----------|--------|
+            | macOS (Apple Silicon) | `aion-darwin-arm64` |
+            | macOS (Intel) | `aion-darwin-x64` |
+            | Linux (x64) | `aion-linux-x64` |
+            | Linux (ARM64) | `aion-linux-arm64` |
+            | Windows | `aion-windows-x64.exe` |
+            
+            Make executable and run:
+            ```bash
+            chmod +x aion-*
+            ./aion-darwin-arm64  # or your platform
+            ```
+            
+            ## What's Changed
+          files: |
+            release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    # Only run if HOMEBREW_TAP_TOKEN is set
+    if: ${{ vars.ENABLE_HOMEBREW_UPDATE != 'false' }}
+    
+    steps:
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Wait for release assets to be available
+        run: |
+          echo "Waiting for release assets..."
+          sleep 60
+      
+      - name: Download and calculate SHA256 checksums
+        id: sha256
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          BASE_URL="https://github.com/${{ env.GITHUB_REPO }}/releases/download/v${VERSION}"
+          
+          echo "Downloading binaries and calculating checksums..."
+          
+          # Function to download and get SHA256
+          get_sha256() {
+            local url="$1"
+            local name="$2"
+            echo "Downloading ${name}..."
+            SHA=$(curl -sfL "${url}" | sha256sum | cut -d' ' -f1)
+            if [ -z "$SHA" ] || [ "$SHA" = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ]; then
+              echo "Error: Failed to download ${name} or file is empty"
+              exit 1
+            fi
+            echo "${name}: ${SHA}"
+            echo "$SHA"
+          }
+          
+          SHA_DARWIN_ARM64=$(get_sha256 "${BASE_URL}/aion-darwin-arm64" "darwin-arm64")
+          SHA_DARWIN_X64=$(get_sha256 "${BASE_URL}/aion-darwin-x64" "darwin-x64")
+          SHA_LINUX_ARM64=$(get_sha256 "${BASE_URL}/aion-linux-arm64" "linux-arm64")
+          SHA_LINUX_X64=$(get_sha256 "${BASE_URL}/aion-linux-x64" "linux-x64")
+          
+          echo "darwin_arm64=${SHA_DARWIN_ARM64}" >> $GITHUB_OUTPUT
+          echo "darwin_x64=${SHA_DARWIN_X64}" >> $GITHUB_OUTPUT
+          echo "linux_arm64=${SHA_LINUX_ARM64}" >> $GITHUB_OUTPUT
+          echo "linux_x64=${SHA_LINUX_X64}" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "All checksums calculated successfully!"
+      
+      - name: Trigger Homebrew tap update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: ${{ env.HOMEBREW_TAP }}
+          event-type: update-formula
+          client-payload: >-
+            {
+              "formula": "aion",
+              "version": "${{ steps.version.outputs.version }}",
+              "sha256_darwin_arm64": "${{ steps.sha256.outputs.darwin_arm64 }}",
+              "sha256_darwin_x64": "${{ steps.sha256.outputs.darwin_x64 }}",
+              "sha256_linux_arm64": "${{ steps.sha256.outputs.linux_arm64 }}",
+              "sha256_linux_x64": "${{ steps.sha256.outputs.linux_x64 }}"
+            }
+      
+      - name: Summary
+        run: |
+          echo "## Homebrew Tap Update Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Checksums" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | SHA256 |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| darwin-arm64 | \`${{ steps.sha256.outputs.darwin_arm64 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| darwin-x64 | \`${{ steps.sha256.outputs.darwin_x64 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| linux-arm64 | \`${{ steps.sha256.outputs.linux_arm64 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| linux-x64 | \`${{ steps.sha256.outputs.linux_x64 }}\` |" >> $GITHUB_STEP_SUMMARY

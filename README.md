@@ -75,12 +75,50 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Option 1: Homebrew (macOS/Linux)
 
 ```bash
-git clone https://github.com/your-username/aion.git
+brew tap nick-skriabin/tap
+brew install aion
+```
+
+### Option 2: Download Binary
+
+Download the latest release for your platform from the [Releases](https://github.com/nick-skriabin/aion/releases) page:
+
+| Platform | Binary |
+|----------|--------|
+| macOS (Apple Silicon) | `aion-darwin-arm64` |
+| macOS (Intel) | `aion-darwin-x64` |
+| Linux (x64) | `aion-linux-x64` |
+| Linux (ARM64) | `aion-linux-arm64` |
+| Windows | `aion-windows-x64.exe` |
+
+```bash
+# Make executable (macOS/Linux)
+chmod +x aion-darwin-arm64
+
+# Move to PATH
+sudo mv aion-darwin-arm64 /usr/local/bin/aion
+
+# Run
+aion
+```
+
+### Option 3: Build from Source
+
+```bash
+git clone https://github.com/nick-skriabin/aion.git
 cd aion
 bun install
+
+# Run in development
+bun dev
+
+# Build binary for current platform
+bun run build
+
+# Binary will be at ./dist/aion
 ```
 
 ### 2. Set Up Google Cloud Credentials
