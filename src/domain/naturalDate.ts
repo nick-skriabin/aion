@@ -34,7 +34,7 @@ function extractDuration(input: string): ExtractedDuration {
   const timeDurationPattern = /\s+for\s+(\d+(?:\.\d+)?)\s*(m|min|mins|minutes?|h|hr|hrs|hours?)(?:\s|$)/i;
   const timeMatch = input.match(timeDurationPattern);
   
-  if (timeMatch) {
+  if (timeMatch && timeMatch[1] && timeMatch[2]) {
     const amount = parseFloat(timeMatch[1]);
     const unit = timeMatch[2].toLowerCase();
     
@@ -53,7 +53,7 @@ function extractDuration(input: string): ExtractedDuration {
   const dateDurationPattern = /\s+for\s+(\d+)\s*(d|day|days|w|wk|wks|week|weeks)(?:\s|$)/i;
   const dateMatch = input.match(dateDurationPattern);
   
-  if (dateMatch) {
+  if (dateMatch && dateMatch[1] && dateMatch[2]) {
     const amount = parseInt(dateMatch[1]);
     const unit = dateMatch[2].toLowerCase();
     
@@ -84,15 +84,17 @@ function parseDateRange(
   
   // Pattern: "from X until/to Y" or "starting X until/to Y"
   const fromUntilMatch = input.match(/^(?:from|starting)\s+(.+?)\s+(?:until|to|till)\s+(.+)$/i);
-  if (fromUntilMatch) {
+  if (fromUntilMatch && fromUntilMatch[1] && fromUntilMatch[2]) {
     const startResults = chrono.parse(fromUntilMatch[1], ref, { forwardDate: true });
     const endResults = chrono.parse(fromUntilMatch[2], ref, { forwardDate: true });
+    const startResult = startResults[0];
+    const endResult = endResults[0];
     
-    if (startResults.length > 0 && endResults.length > 0) {
-      const startDate = DateTime.fromJSDate(startResults[0].start.date(), { zone: tz });
-      const endDate = DateTime.fromJSDate(endResults[0].start.date(), { zone: tz });
-      const startHasTime = startResults[0].start.isCertain("hour");
-      const endHasTime = endResults[0].start.isCertain("hour");
+    if (startResult && endResult) {
+      const startDate = DateTime.fromJSDate(startResult.start.date(), { zone: tz });
+      const endDate = DateTime.fromJSDate(endResult.start.date(), { zone: tz });
+      const startHasTime = startResult.start.isCertain("hour");
+      const endHasTime = endResult.start.isCertain("hour");
       
       return {
         date: startDate,
@@ -105,15 +107,17 @@ function parseDateRange(
   
   // Pattern: "between X and Y"
   const betweenMatch = input.match(/^between\s+(.+?)\s+and\s+(.+)$/i);
-  if (betweenMatch) {
+  if (betweenMatch && betweenMatch[1] && betweenMatch[2]) {
     const startResults = chrono.parse(betweenMatch[1], ref, { forwardDate: true });
     const endResults = chrono.parse(betweenMatch[2], ref, { forwardDate: true });
+    const startResult = startResults[0];
+    const endResult = endResults[0];
     
-    if (startResults.length > 0 && endResults.length > 0) {
-      const startDate = DateTime.fromJSDate(startResults[0].start.date(), { zone: tz });
-      const endDate = DateTime.fromJSDate(endResults[0].start.date(), { zone: tz });
-      const startHasTime = startResults[0].start.isCertain("hour");
-      const endHasTime = endResults[0].start.isCertain("hour");
+    if (startResult && endResult) {
+      const startDate = DateTime.fromJSDate(startResult.start.date(), { zone: tz });
+      const endDate = DateTime.fromJSDate(endResult.start.date(), { zone: tz });
+      const startHasTime = startResult.start.isCertain("hour");
+      const endHasTime = endResult.start.isCertain("hour");
       
       return {
         date: startDate,
@@ -124,10 +128,10 @@ function parseDateRange(
     }
     
     // Handle "between march 6 and 12" where "12" is just a day number
-    if (startResults.length > 0) {
+    if (startResult) {
       const dayMatch = betweenMatch[2].match(/^(\d{1,2})$/);
-      if (dayMatch) {
-        const startDate = DateTime.fromJSDate(startResults[0].start.date(), { zone: tz });
+      if (dayMatch && dayMatch[1]) {
+        const startDate = DateTime.fromJSDate(startResult.start.date(), { zone: tz });
         const endDay = parseInt(dayMatch[1]);
         // Use the same month/year as start date
         let endDate = startDate.set({ day: endDay });
@@ -148,16 +152,18 @@ function parseDateRange(
   
   // Pattern: "X - Y" or "X through Y"
   const dashMatch = input.match(/^(.+?)\s*(?:-|–|through)\s*(.+)$/i);
-  if (dashMatch && !dashMatch[1].match(/^\d{1,2}:\d{2}/) && !dashMatch[2].match(/^\d{1,2}:\d{2}/)) {
+  if (dashMatch && dashMatch[1] && dashMatch[2] && !dashMatch[1].match(/^\d{1,2}:\d{2}/) && !dashMatch[2].match(/^\d{1,2}:\d{2}/)) {
     // Make sure it's not a time range like "3:00 - 5:00"
     const startResults = chrono.parse(dashMatch[1], ref, { forwardDate: true });
     const endResults = chrono.parse(dashMatch[2], ref, { forwardDate: true });
+    const startResult = startResults[0];
+    const endResult = endResults[0];
     
-    if (startResults.length > 0 && endResults.length > 0) {
-      const startDate = DateTime.fromJSDate(startResults[0].start.date(), { zone: tz });
-      const endDate = DateTime.fromJSDate(endResults[0].start.date(), { zone: tz });
-      const startHasTime = startResults[0].start.isCertain("hour");
-      const endHasTime = endResults[0].start.isCertain("hour");
+    if (startResult && endResult) {
+      const startDate = DateTime.fromJSDate(startResult.start.date(), { zone: tz });
+      const endDate = DateTime.fromJSDate(endResult.start.date(), { zone: tz });
+      const startHasTime = startResult.start.isCertain("hour");
+      const endHasTime = endResult.start.isCertain("hour");
       
       // Only treat as date range if at least one part doesn't have time
       if (!startHasTime || !endHasTime) {
@@ -236,9 +242,9 @@ export function parseNaturalDate(
   // Use chrono-node for natural language
   const results = chrono.parse(parseInput, ref, { forwardDate: true });
   
-  if (results.length === 0) return null;
-
   const parsed = results[0];
+  if (!parsed) return null;
+  
   const date = parsed.start.date();
   
   // Check if time was explicitly mentioned
@@ -277,7 +283,7 @@ function parseShorthand(
   tz: string
 ): ParsedDateTime | null {
   const match = input.trim().match(/^([+-])(\d+)([dwhmDWHM])$/);
-  if (!match) return null;
+  if (!match || !match[1] || !match[2] || !match[3]) return null;
 
   const sign = match[1] === "+" ? 1 : -1;
   const amount = parseInt(match[2]) * sign;

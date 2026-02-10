@@ -88,7 +88,7 @@ export const calendarSidebarVisibleAtom = atom<boolean>(false);
 
 // Set of enabled calendar IDs (format: "accountEmail:calendarId")
 // Empty set means all calendars are enabled (default behavior)
-export const enabledCalendarsAtom = atom<Set<string>>(new Set());
+export const enabledCalendarsAtom = atom<Set<string>>(new Set<string>());
 
 // Whether we've loaded the initial enabled calendars from disk
 export const enabledCalendarsLoadedAtom = atom<boolean>(false);
@@ -207,7 +207,7 @@ export const calendarsByAccountAtom = atom((get) => {
     if (!byAccount[cal.accountEmail]) {
       byAccount[cal.accountEmail] = [];
     }
-    byAccount[cal.accountEmail].push(cal);
+    byAccount[cal.accountEmail]!.push(cal);
   }
   
   return byAccount;

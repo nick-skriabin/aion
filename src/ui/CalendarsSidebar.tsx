@@ -152,8 +152,9 @@ export function CalendarsSidebar() {
   
   // Reset selection to first calendar when sidebar becomes visible
   useEffect(() => {
-    if (isVisible && selectableIndices.length > 0 && !selectableIndices.includes(selectedIndex)) {
-      setSelectedIndex(selectableIndices[0]);
+    const firstIdx = selectableIndices[0];
+    if (isVisible && firstIdx !== undefined && !selectableIndices.includes(selectedIndex)) {
+      setSelectedIndex(firstIdx);
     }
   }, [isVisible, selectableIndices, selectedIndex, setSelectedIndex]);
   
@@ -185,7 +186,10 @@ export function CalendarsSidebar() {
       newPos = 0;
     }
     
-    setSelectedIndex(selectableIndices[newPos]);
+    const newIndex = selectableIndices[newPos];
+    if (newIndex !== undefined) {
+      setSelectedIndex(newIndex);
+    }
   }, [selectableIndices, selectedIndex, setSelectedIndex]);
   
   handlersRef.current.toggle = useCallback(async () => {
@@ -219,8 +223,6 @@ export function CalendarsSidebar() {
       style={{
         width: SIDEBAR_WIDTH,
         flexDirection: "column",
-        borderRight: "single",
-        borderColor: isFocused ? theme.accent.primary : theme.border.default,
       }}
     >
       {/* Header */}
@@ -240,7 +242,7 @@ export function CalendarsSidebar() {
         {items.map((item, index) => {
           if (item.type === "account") {
             // Account header
-            const accountName = item.accountEmail.split("@")[0];
+            const accountName = item.accountEmail.split("@")[0] ?? "";
             return (
               <Box key={item.key} style={{ paddingX: 1, paddingTop: index > 0 ? 1 : 0 }}>
                 <Text style={{ color: theme.text.dim, dim: true }}>
@@ -277,7 +279,7 @@ export function CalendarsSidebar() {
               <Text style={{ color: isSelected ? theme.selection.text : theme.text.secondary }}>
                 {enabled ? "☑" : "☐"}
               </Text>
-              <Text style={{ color, dim: !enabled }}> ● </Text>
+              <Text style={{ color: color as any, dim: !enabled }}> ● </Text>
               <Text
                 style={{
                   color: isSelected ? theme.selection.text : (enabled ? theme.text.primary : theme.text.dim),

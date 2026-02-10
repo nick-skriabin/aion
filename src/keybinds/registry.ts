@@ -116,6 +116,15 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "m", display: "m", description: "Maybe / Tentative", action: "tentative" },
     { key: "escape", display: "Esc", description: "Close panel", action: "close" },
   ],
+
+  search: [
+    { key: "j", display: "j / ↓", description: "Next result", action: "next" },
+    { key: "down", display: "j / ↓", description: "Next result", action: "next" },
+    { key: "k", display: "k / ↑", description: "Previous result", action: "prev" },
+    { key: "up", display: "k / ↑", description: "Previous result", action: "prev" },
+    { key: "return", display: "Enter", description: "Go to event", action: "select" },
+    { key: "escape", display: "Esc", description: "Close search", action: "close" },
+  ],
 };
 
 // Get keybinds for a scope, deduped by display key (for help dialog)
@@ -143,6 +152,7 @@ export function getKeybindsForHelp(context: FocusContext): { title: string; keyb
     command: "Command Bar",
     confirm: "Confirm Dialog",
     notifications: "Notifications",
+    search: "Search",
   };
 
   // Add context-specific keybinds

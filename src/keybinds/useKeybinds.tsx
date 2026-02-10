@@ -26,7 +26,7 @@ function parseKeyString(keyStr: string): { name: string; shift: boolean; ctrl: b
   }
   
   const parts = keyStr.toLowerCase().split("+");
-  const name = parts[parts.length - 1];
+  const name = parts[parts.length - 1] ?? "";
   const shift = parts.includes("shift");
   const ctrl = parts.includes("ctrl");
   return { name, shift, ctrl };

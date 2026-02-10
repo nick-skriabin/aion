@@ -222,11 +222,15 @@ function mergeBusyPeriods(periods: BusyPeriod[]): BusyPeriod[] {
   // Sort by start time
   const sorted = [...periods].sort((a, b) => a.start.localeCompare(b.start));
   
-  const merged: BusyPeriod[] = [{ ...sorted[0] }];
+  const first = sorted[0];
+  if (!first) return [];
+  
+  const merged: BusyPeriod[] = [{ start: first.start, end: first.end }];
   
   for (let i = 1; i < sorted.length; i++) {
     const current = sorted[i];
     const last = merged[merged.length - 1];
+    if (!current || !last) continue;
     
     // If current overlaps or is adjacent to last, merge them
     if (current.start <= last.end) {
@@ -234,7 +238,7 @@ function mergeBusyPeriods(periods: BusyPeriod[]): BusyPeriod[] {
         last.end = current.end;
       }
     } else {
-      merged.push({ ...current });
+      merged.push({ start: current.start, end: current.end });
     }
   }
   

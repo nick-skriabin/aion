@@ -103,7 +103,7 @@ export async function getAccount(email: string): Promise<AccountData | null> {
 export async function getDefaultAccount(): Promise<AccountData | null> {
   const store = await loadAccountsStore();
   if (store.defaultAccount && store.accounts[store.defaultAccount]) {
-    return store.accounts[store.defaultAccount];
+    return store.accounts[store.defaultAccount] ?? null;
   }
   // Fall back to first account if no default set
   const accounts = Object.values(store.accounts);
@@ -204,11 +204,14 @@ async function refreshAccountToken(email: string, refreshToken: string): Promise
     throw new Error(`Failed to refresh token: ${error}`);
   }
   
-  const data = await response.json();
+  const data = await response.json() as { access_token: string; expires_in: number; token_type: string; scope: string };
   
   // Google doesn't return refresh_token on refresh, keep the old one
   const tokens: TokenData = {
-    ...data,
+    access_token: data.access_token,
+    token_type: data.token_type,
+    scope: data.scope,
+    expires_in: data.expires_in,
     refresh_token: refreshToken,
     expires_at: Date.now() + (data.expires_in * 1000),
   };
@@ -314,7 +317,7 @@ export async function fetchUserInfo(accessToken: string): Promise<AccountInfo> {
     throw new Error(`Failed to fetch user info: ${error}`);
   }
   
-  const data = await response.json();
+  const data = await response.json() as { email: string; name?: string; picture?: string };
   authLogger.info("User info fetched successfully", { email: data.email });
   return {
     email: data.email,

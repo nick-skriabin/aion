@@ -248,15 +248,13 @@ export function AccountsDialog() {
               style={{
                 width: SIDEBAR_WIDTH,
                 flexDirection: "column",
-                borderRight: true,
-                borderColor: theme.text.dim,
                 paddingRight: 1,
               }}
             >
               {accounts.map((account, i) => {
                 const isSelected = i === selectedIndex;
                 const isDefault = account.email === defaultEmail;
-                const name = customNames[account.email] || account.name || account.email.split("@")[0];
+                const name = customNames[account.email] || account.name || account.email.split("@")[0] || "";
 
                 return (
                   <Text

@@ -47,7 +47,7 @@ async function calendarFetch<T>(
     return undefined as T;
   }
   
-  return response.json();
+  return response.json() as Promise<T>;
 }
 
 /**
@@ -219,7 +219,7 @@ function toGCalEvent(event: GoogleCalendarEvent, accountEmail?: string, calendar
   return {
     id: compositeId,
     status: event.status as "confirmed" | "tentative" | "cancelled",
-    summary: event.summary,
+    summary: event.summary ?? "",
     description: event.description,
     location: event.location,
     start: {
@@ -232,9 +232,8 @@ function toGCalEvent(event: GoogleCalendarEvent, accountEmail?: string, calendar
       date: event.end.date,
       timeZone: event.end.timeZone,
     },
-    created: event.created,
-    updated: event.updated,
-    creator: event.creator,
+    createdAt: event.created,
+    updatedAt: event.updated,
     organizer: event.organizer,
     attendees: event.attendees?.map((a) => ({
       email: a.email,
@@ -244,10 +243,9 @@ function toGCalEvent(event: GoogleCalendarEvent, accountEmail?: string, calendar
       organizer: a.organizer,
     })),
     hangoutLink: event.hangoutLink,
-    conferenceData: event.conferenceData,
     recurringEventId: event.recurringEventId,
     recurrence: event.recurrence,
-    eventType: event.eventType as "default" | "outOfOffice" | "focusTime" | "workingLocation" | "birthday" | undefined,
+    eventType: (event.eventType as "default" | "outOfOffice" | "focusTime" | "workingLocation" | "birthday") ?? "default",
     visibility: event.visibility as "default" | "public" | "private" | "confidential" | undefined,
     reminders: event.reminders ? {
       useDefault: event.reminders.useDefault,
@@ -877,11 +875,15 @@ function mergeBusyPeriods(periods: BusyPeriod[]): BusyPeriod[] {
   // Sort by start time
   const sorted = [...periods].sort((a, b) => a.start.localeCompare(b.start));
   
-  const merged: BusyPeriod[] = [sorted[0]];
+  const first = sorted[0];
+  if (!first) return [];
+  
+  const merged: BusyPeriod[] = [first];
   
   for (let i = 1; i < sorted.length; i++) {
     const current = sorted[i];
     const last = merged[merged.length - 1];
+    if (!current || !last) continue;
     
     // If current overlaps or is adjacent to last, merge them
     if (current.start <= last.end) {

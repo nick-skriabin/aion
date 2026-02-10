@@ -104,7 +104,7 @@ export async function updateConfig(updates: Partial<Config>): Promise<void> {
   
   try {
     await ensureDirectories();
-    const tomlContent = TOML.stringify(updated as Record<string, unknown>);
+    const tomlContent = TOML.stringify(updated as unknown as TOML.JsonMap);
     await Bun.write(CONFIG_FILE, tomlContent);
   } catch (error) {
     appLogger.error("Failed to save config", error);

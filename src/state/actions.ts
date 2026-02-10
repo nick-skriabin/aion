@@ -794,11 +794,12 @@ export const updateAttendanceAtom = atom(
     // Find or create self attendee
     let attendees = event.attendees ? [...event.attendees] : [];
     const selfIndex = attendees.findIndex((a) => a.self);
+    const selfAttendee = selfIndex >= 0 ? attendees[selfIndex] : undefined;
     
-    if (selfIndex >= 0) {
+    if (selfAttendee) {
       // Update existing self attendee
       attendees[selfIndex] = {
-        ...attendees[selfIndex],
+        ...selfAttendee,
         responseStatus: status,
       };
     } else {
@@ -832,12 +833,13 @@ let messageIdCounter = 0;
  */
 export const showMessageAtom = atom(
   null,
-  (get, set, options: { text: string; type?: MessageType; autoDismiss?: number }) => {
+  (get, set, options: { text: string; type?: MessageType; autoDismiss?: number; progress?: Message["progress"] }) => {
     const id = `msg-${++messageIdCounter}`;
     const message: Message = {
       id,
       text: options.text,
       type: options.type || "info",
+      progress: options.progress,
     };
     
     set(messageAtom, message);
@@ -1029,7 +1031,7 @@ export const gotoDateAtom = atom(null, async (get, set, dateString: string) => {
     set(selectedDayAtom, targetDay);
     set(viewAnchorDayAtom, targetDay);
     set(focusAtom, "timeline");
-    set(showMessageAtom, `Jumped to ${targetDay.toFormat("EEEE, MMMM d, yyyy")}`);
+    set(showMessageAtom, { text: `Jumped to ${targetDay.toFormat("EEEE, MMMM d, yyyy")}` });
   } else {
     // Try direct ISO date
     const iso = DateTime.fromISO(dateString);
@@ -1038,9 +1040,9 @@ export const gotoDateAtom = atom(null, async (get, set, dateString: string) => {
       set(selectedDayAtom, targetDay);
       set(viewAnchorDayAtom, targetDay);
       set(focusAtom, "timeline");
-      set(showMessageAtom, `Jumped to ${targetDay.toFormat("EEEE, MMMM d, yyyy")}`);
+      set(showMessageAtom, { text: `Jumped to ${targetDay.toFormat("EEEE, MMMM d, yyyy")}` });
     } else {
-      set(showMessageAtom, `Could not parse date: ${dateString}`);
+      set(showMessageAtom, { text: `Could not parse date: ${dateString}`, type: "error" });
     }
   }
 });
@@ -1145,7 +1147,12 @@ export const upgradePermissionsAtom = atom(null, async (get, set) => {
   
   // Get default account or first account
   const defaultAccount = await getDefaultAccount();
-  const accountToUpgrade = defaultAccount?.account.email || accounts[0].account.email;
+  const firstAccount = accounts[0];
+  if (!firstAccount) {
+    set(showMessageAtom, { text: "No accounts. Run 'login' first.", type: "warning" });
+    return;
+  }
+  const accountToUpgrade = defaultAccount?.account.email || firstAccount.account.email;
   
   set(showMessageAtom, { text: "Opening browser to upgrade permissions...", type: "progress" });
   
@@ -1322,8 +1329,8 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
           for (const event of incrementalResult.changed) {
             const eventWithMeta: GCalEvent = {
               ...event,
-              createdAt: event.created || new Date().toISOString(),
-              updatedAt: event.updated || new Date().toISOString(),
+              createdAt: event.createdAt || new Date().toISOString(),
+              updatedAt: event.updatedAt || new Date().toISOString(),
             };
             // Upsert - try update first, create if not exists
             try {
@@ -1345,7 +1352,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
           // Save new sync tokens
           for (const [key, token] of incrementalResult.syncTokens) {
             const [accountEmail, calendarId] = key.split(":");
-            await setSyncToken(accountEmail, calendarId, token);
+            if (accountEmail && calendarId) {
+              await setSyncToken(accountEmail, calendarId, token);
+            }
           }
           
           // Reload events into state
@@ -1371,7 +1380,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
           // Still update sync tokens
           for (const [key, token] of incrementalResult.syncTokens) {
             const [accountEmail, calendarId] = key.split(":");
-            await setSyncToken(accountEmail, calendarId, token);
+            if (accountEmail && calendarId) {
+              await setSyncToken(accountEmail, calendarId, token);
+            }
           }
         }
         
@@ -1441,8 +1452,8 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     for (const event of uniqueEvents) {
       const eventWithMeta: GCalEvent = {
         ...event,
-        createdAt: event.created || new Date().toISOString(),
-        updatedAt: event.updated || new Date().toISOString(),
+        createdAt: event.createdAt || new Date().toISOString(),
+        updatedAt: event.updatedAt || new Date().toISOString(),
       };
       await eventsRepo.create(eventWithMeta);
       saved++;
@@ -1457,7 +1468,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     // Save sync tokens for incremental sync
     for (const [key, token] of syncTokens) {
       const [accountEmail, calendarId] = key.split(":");
-      await setSyncToken(accountEmail, calendarId, token);
+      if (accountEmail && calendarId) {
+        await setSyncToken(accountEmail, calendarId, token);
+      }
     }
     
     // Update the events atom
@@ -1465,8 +1478,8 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     for (const event of uniqueEvents) {
       eventsMap[event.id] = {
         ...event,
-        createdAt: event.created || new Date().toISOString(),
-        updatedAt: event.updated || new Date().toISOString(),
+        createdAt: event.createdAt || new Date().toISOString(),
+        updatedAt: event.updatedAt || new Date().toISOString(),
       };
     }
     set(eventsAtom, eventsMap);

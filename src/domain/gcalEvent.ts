@@ -19,6 +19,7 @@ export const EventTypeSchema = z.enum([
   "outOfOffice",
   "focusTime",
   "birthday",
+  "workingLocation",
 ]);
 export type EventType = z.infer<typeof EventTypeSchema>;
 
@@ -209,7 +210,7 @@ export function parseRecurrenceRule(recurrence: string[] | undefined): string | 
   const rule = rrule.replace("RRULE:", "");
   const parts = rule.split(";").reduce((acc, part) => {
     const [key, value] = part.split("=");
-    acc[key] = value;
+    if (key) acc[key] = value ?? "";
     return acc;
   }, {} as Record<string, string>);
   

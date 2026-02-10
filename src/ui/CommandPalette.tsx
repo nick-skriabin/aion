@@ -55,9 +55,9 @@ export function CommandPalette() {
     if (!input.trim()) return allCommands;
 
     // Only match against the first word (command name), not arguments
-    const firstWord = input.toLowerCase().trim().split(/\s+/)[0];
+    const firstWord = input.toLowerCase().trim().split(/\s+/)[0] ?? "";
     return allCommands.filter((cmd) => {
-      const cmdName = cmd.name.split(" ")[0]; // Get command name without args placeholder
+      const cmdName = cmd.name.split(" ")[0] ?? ""; // Get command name without args placeholder
       return cmdName.toLowerCase().includes(firstWord) ||
         cmd.description.toLowerCase().includes(firstWord);
     });
@@ -133,11 +133,11 @@ export function getSelectedCommand(input: string, selectedIndex: number) {
   const allCommands = getAllCommands();
   
   // Only match against the first word (command name), not arguments
-  const firstWord = input.toLowerCase().trim().split(/\s+/)[0];
+  const firstWord = input.toLowerCase().trim().split(/\s+/)[0] ?? "";
 
   const filteredCommands = firstWord
     ? allCommands.filter((cmd) => {
-        const cmdName = cmd.name.split(" ")[0]; // Get command name without args placeholder
+        const cmdName = cmd.name.split(" ")[0] ?? ""; // Get command name without args placeholder
         return cmdName.toLowerCase().includes(firstWord) ||
           cmd.description.toLowerCase().includes(firstWord);
       })
