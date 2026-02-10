@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Box, Text, Portal, ScrollView, FocusScope, Keybind } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
+import { convert } from "html-to-text";
 import { selectedEventAtom, timezoneAtom, focusAtom, calendarColorMapAtom, getCalendarColor, calendarsAtom } from "../state/atoms.ts";
 import { updateAttendanceAtom, openEditDialogAtom, proposeNewTimeAtom } from "../state/actions.ts";
 import { useDeleteEvent } from "./hooks/useDeleteEvent.tsx";
@@ -19,6 +20,18 @@ import {
 } from "../domain/gcalEvent.ts";
 import { getEventStart, getEventEnd, formatTimeRange, formatDayHeader, getLocalTimezone } from "../domain/time.ts";
 import { theme } from "./theme.ts";
+
+// Convert HTML description to plain text for terminal display
+function formatDescription(html: string): string {
+  return convert(html, {
+    wordwrap: false, // Let the terminal handle wrapping
+    selectors: [
+      { selector: "a", options: { ignoreHref: true } }, // Just show link text, not URLs
+      { selector: "img", format: "skip" }, // Skip images
+      { selector: "br", format: "block" }, // Preserve line breaks
+    ],
+  }).trim();
+}
 
 const LABEL_WIDTH = 10;
 const PANEL_WIDTH = 48;
@@ -428,7 +441,7 @@ export function DetailsPanel() {
                   <Text style={{ color: theme.text.dim }}>notes</Text>
                 </Box>
                 <Text style={{ color: theme.text.secondary }} wrap="wrap">
-                  {event.description}
+                  {formatDescription(event.description)}
                 </Text>
               </>
             )}

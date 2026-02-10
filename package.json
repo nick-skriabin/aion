@@ -38,6 +38,7 @@
     "@nick-skriabin/glyph": "^0.1.48",
     "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.38.3",
+    "html-to-text": "^9.0.5",
     "jotai": "^2.10.4",
     "lunr": "^2.3.9",
     "luxon": "^3.5.0",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/html-to-text": "^9.0.4",
     "@types/iarna__toml": "^2.0.5",
     "@types/lunr": "^2.3.7",
     "@types/luxon": "^3.4.2",
