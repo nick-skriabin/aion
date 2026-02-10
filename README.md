@@ -188,10 +188,12 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 
 | Key | Action |
 |-----|--------|
-| `h` / `l` | Switch between days sidebar and timeline |
-| `Tab` | Toggle focus between panes |
 | `j` / `↓` | Move down / Next item |
 | `k` / `↑` | Move up / Previous item |
+| `h` / `←` | Previous day / column |
+| `l` / `→` | Next day / column |
+| `Tab` | Cycle focus between panes |
+| `` ` `` | Cycle focus (Calendars → Days → Timeline) |
 | `gg` | Jump to first item |
 | `G` | Jump to last item |
 | `n` | Jump to now (timeline only) |
@@ -225,6 +227,13 @@ Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view det
 |-----|--------|
 | `Shift+C` | Toggle calendars sidebar |
 | `A` | Toggle all-day events section |
+
+### View
+
+| Key | Action |
+|-----|--------|
+| `3` | Toggle between 1 and 3 column view |
+| `` ` `` | Cycle focus (Calendars → Days → Timeline) |
 
 ### General
 
@@ -282,6 +291,12 @@ Open the command palette with `:` and type a command:
 |---------|--------|
 | `search` | Search events by title/description |
 
+### View
+
+| Command | Action |
+|---------|--------|
+| `columns <n>` | Set column count (1, 3, or 5) |
+
 ### General
 
 | Command | Action |
@@ -290,7 +305,7 @@ Open the command palette with `:` and type a command:
 | `notifications` | Open notifications panel |
 | `quit` | Exit application |
 
-Navigate with `↑`/`↓` or `Ctrl+P`/`Ctrl+N`, select with `Enter`.
+Navigate with `↑`/`↓` or `Ctrl+P`/`Ctrl+N`, auto-fill with `Ctrl+Y`, select with `Enter`.
 
 ---
 
@@ -427,11 +442,16 @@ You can override XDG paths with environment variables:
 - [x] Accounts management dialog
 - [x] Recurring event creation/editing
 - [x] Search events by title/description
+- [x] Multi-column day view (1, 3, or 5 columns)
+- [x] Column navigation with h/l arrows
+- [x] Persistent view settings
+- [x] Command auto-fill (Ctrl+Y)
+- [x] Built-in credentials for distributed binaries
+- [x] Homebrew distribution
+- [x] XDG Base Directory support
 
 ### 🚧 In Progress
 
-- [ ] Multi-column day view (1-5 columns)
-- [ ] Week view
 - [ ] Month view
 
 ### 📋 Planned
@@ -440,6 +460,8 @@ You can override XDG paths with environment variables:
 - [ ] CalDAV support
 - [ ] Offline mode improvements
 - [ ] Custom notifications/reminders
+- [ ] Agenda view (list of upcoming events)
+- [ ] Event templates
 
 ---
 

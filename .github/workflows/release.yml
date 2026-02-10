@@ -46,7 +46,14 @@ jobs:
         run: bun install --frozen-lockfile
       
       - name: Build binary
-        run: bun build --compile --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }}
+        run: |
+          bun build --compile --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }} \
+            --define __AION_GOOGLE_CLIENT_ID__="'${{ secrets.GOOGLE_CLIENT_ID }}'" \
+            --define __AION_GOOGLE_CLIENT_SECRET__="'${{ secrets.GOOGLE_CLIENT_SECRET }}'"
+        env:
+          # Fallback in case secrets aren't set
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || '' }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || '' }}
       
       - name: Make executable
         run: chmod +x ${{ matrix.artifact }}

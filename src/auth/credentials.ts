@@ -8,23 +8,28 @@
  * For desktop apps, the secret is not truly "secret" (it's embedded in the app),
  * but Google still requires it. PKCE provides the actual security.
  * 
- * Configure credentials via:
- * 1. Environment variables: AION_GOOGLE_CLIENT_ID and AION_GOOGLE_CLIENT_SECRET
- * 2. Config file (~/.config/aion/config.toml):
- *    [google]
- *    clientId = "your-client-id.apps.googleusercontent.com"
- *    clientSecret = "your-client-secret"
+ * Credential priority (first available wins):
+ * 1. Config file (~/.config/aion/config.toml) - BYO override
+ * 2. Environment variables (AION_GOOGLE_CLIENT_ID, AION_GOOGLE_CLIENT_SECRET) - BYO override
+ * 3. Built-in credentials (embedded at build time) - default for distributed binaries
  */
 
 import { getConfig } from "../config/config.ts";
 
-// Get credentials from config or environment variables (fallback)
+// Built-in credentials - embedded at compile time via --define flag
+// These are replaced during CI build with actual values
+// @ts-ignore - These are defined at compile time
+const BUILTIN_CLIENT_ID: string | undefined = typeof __AION_GOOGLE_CLIENT_ID__ !== "undefined" ? __AION_GOOGLE_CLIENT_ID__ : undefined;
+// @ts-ignore - These are defined at compile time
+const BUILTIN_CLIENT_SECRET: string | undefined = typeof __AION_GOOGLE_CLIENT_SECRET__ !== "undefined" ? __AION_GOOGLE_CLIENT_SECRET__ : undefined;
+
+// Get credentials with priority: config > env vars > built-in
 function getCredentials(): { clientId: string | undefined; clientSecret: string | undefined } {
   const config = getConfig();
   
   return {
-    clientId: config.google?.clientId || process.env.AION_GOOGLE_CLIENT_ID,
-    clientSecret: config.google?.clientSecret || process.env.AION_GOOGLE_CLIENT_SECRET,
+    clientId: config.google?.clientId || process.env.AION_GOOGLE_CLIENT_ID || BUILTIN_CLIENT_ID,
+    clientSecret: config.google?.clientSecret || process.env.AION_GOOGLE_CLIENT_SECRET || BUILTIN_CLIENT_SECRET,
   };
 }
 
@@ -34,7 +39,7 @@ export function getGoogleClientId(): string {
   if (!clientId) {
     throw new Error(
       "Google Client ID not configured.\n\n" +
-      "Please set up your Google Cloud credentials:\n" +
+      "If you're running from source, set up your Google Cloud credentials:\n" +
       "1. Create a project at https://console.cloud.google.com\n" +
       "2. Enable Google Calendar API\n" +
       "3. Create OAuth 2.0 credentials (Desktop app type)\n" +
@@ -55,7 +60,7 @@ export function getGoogleClientSecret(): string {
   if (!clientSecret) {
     throw new Error(
       "Google Client Secret not configured.\n\n" +
-      "Please add your client secret to ~/.config/aion/config.toml:\n\n" +
+      "If you're running from source, add your client secret to ~/.config/aion/config.toml:\n\n" +
       "   [google]\n" +
       '   clientId = "your-client-id.apps.googleusercontent.com"\n' +
       '   clientSecret = "your-client-secret"\n'
