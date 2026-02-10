@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef } from "react";
-import { Box, Text, useInput, useApp } from "@nick-skriabin/glyph";
+import { Box, Text, useInput, useApp, type Color } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import {
@@ -201,22 +201,22 @@ function EventCell({
   calendarColorMap: Record<string, string>;
 }) {
   if (!slotEvent) {
-    return <Box style={{ flexGrow: 1, flexBasis: 0, width: 0, clip: true }} />;
+    return <Box style={{ flexGrow: 1, width: 0, clip: true }} />;
   }
 
   const { layout, isStart } = slotEvent;
   const event = layout.event;
-  const eventColor = getEventColor(event, calendarColorMap);
+  const eventColor = getEventColor(event, calendarColorMap) as Color;
   const isHighlighted = isSelected && isFocused;
   const responseStatus = getSelfResponseStatus(event);
   const hasAttendees = (event.attendees?.length ?? 0) > 0;
   const attendanceIndicator = getAttendanceIndicator(responseStatus, hasAttendees);
-  const attendanceColor = getAttendanceColor(responseStatus, hasAttendees);
+  const attendanceColor = getAttendanceColor(responseStatus, hasAttendees) as Color | undefined;
   const isDeclined = responseStatus === "declined";
   const isPast = isEventPast(event, getLocalTimezone());
   const shouldDim = isDeclined || isPast;
 
-  const textColor = isHighlighted
+  const textColor: Color = isHighlighted
     ? theme.selection.text
     : (shouldDim ? theme.text.dim : eventColor);
   const bg = isHighlighted ? theme.selection.background : undefined;
@@ -233,14 +233,14 @@ function EventCell({
         {attendanceIndicator && (
           <Text style={{ bg, color: isHighlighted ? theme.selection.text : attendanceColor }}>{attendanceIndicator}</Text>
         )}
-        <Box style={{ flexGrow: 1, flexBasis: 0, width: 0, clip: true }}>
+        <Box style={{ flexGrow: 1, width: 0, clip: true }}>
           <Text style={{ bg, color: textColor, bold: isHighlighted, dim: shouldDim }}>{title}</Text>
         </Box>
       </Box>
     );
   } else {
     return (
-      <Box style={{ flexGrow: 1, flexBasis: 0, width: 0, clip: true }}>
+      <Box style={{ flexGrow: 1, width: 0, clip: true }}>
         <Text style={{ bg, color: isHighlighted ? theme.selection.text : eventColor, dim: shouldDim }}>│</Text>
       </Box>
     );
@@ -357,16 +357,18 @@ function AllDayEventRow({
   const shouldDim = isDeclined || isPast;
 
   const bgColor = isHighlighted ? theme.selection.background : undefined;
-  const textColor = isHighlighted ? theme.selection.text : (shouldDim ? theme.text.dim : eventColor);
+  const eventColorTyped = eventColor as Color;
+  const attendanceColorTyped = attendanceColor as Color | undefined;
+  const textColor: Color = isHighlighted ? theme.selection.text : (shouldDim ? theme.text.dim : eventColorTyped);
 
   return (
     <Box style={{ flexDirection: "row", height: 1 }}>
       {showLabel && <Box style={{ width: HOUR_LABEL_WIDTH }}>{isFirst && <Text style={{ color: theme.text.dim }}>all-day</Text>}</Box>}
       <Text style={{ color: theme.text.dim }}>│</Text>
       <Box style={{ flexGrow: 1, flexDirection: "row", bg: bgColor, paddingLeft: 1 }}>
-        <Text style={{ color: eventColor, dim: shouldDim }}>●</Text>
+        <Text style={{ color: eventColorTyped, dim: shouldDim }}>●</Text>
         <Text style={{ color: isHighlighted ? theme.selection.text : theme.text.dim }}>{isHighlighted ? "▸" : " "}</Text>
-        {attendanceIndicator && <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColor }}>{attendanceIndicator}</Text>}
+        {attendanceIndicator && <Text style={{ color: isHighlighted ? theme.selection.text : attendanceColorTyped }}>{attendanceIndicator}</Text>}
         <Text style={{ color: textColor, bold: isHighlighted, dim: shouldDim }}>{getDisplayTitle(event)}</Text>
       </Box>
     </Box>

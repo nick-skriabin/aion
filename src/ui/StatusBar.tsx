@@ -56,7 +56,7 @@ function findClosestEvent(events: GCalEvent[], tz: string): GCalEvent | null {
 
   // If no upcoming event, return the last event of the day
   if (!closest && events.length > 0) {
-    closest = events[events.length - 1];
+    closest = events[events.length - 1] ?? null;
   }
 
   return closest;
@@ -126,9 +126,9 @@ function CommandInput() {
   const filteredCommands = useMemo(() => {
     if (!input.trim()) return allCommands;
     // Only match against the first word (command name), not arguments
-    const firstWord = input.toLowerCase().trim().split(/\s+/)[0];
+    const firstWord = input.toLowerCase().trim().split(/\s+/)[0] ?? "";
     return allCommands.filter((cmd) => {
-      const cmdName = cmd.name.split(" ")[0]; // Get command name without args placeholder
+      const cmdName = cmd.name.split(" ")[0] ?? ""; // Get command name without args placeholder
       return cmdName.toLowerCase().includes(firstWord) ||
         cmd.description.toLowerCase().includes(firstWord);
     });
@@ -324,7 +324,7 @@ function MessageDisplay() {
 
   return (
     <Box style={{ flexDirection: "row", flexGrow: 1 }}>
-      <Text style={{ color, bold: message.type === "error" }}>
+      <Text style={{ color: color as any, bold: message.type === "error" }}>
         {prefix}{message.text}{progressText}
       </Text>
     </Box>
