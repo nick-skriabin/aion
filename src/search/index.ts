@@ -72,34 +72,43 @@ function rebuildIndex(): void {
 
 /**
  * Search for events matching the query
- * Returns events sorted by relevance
+ * Uses simple case-insensitive substring matching for predictable results
  */
 export function searchEvents(query: string): GCalEvent[] {
-  if (!searchIndex || !query.trim()) {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) {
     return [];
   }
   
-  try {
-    // Add wildcard for partial matches
-    const searchQuery = query
-      .split(/\s+/)
-      .filter(term => term.length > 0)
-      .map(term => `${term}*`)
-      .join(" ");
+  const terms = trimmed.split(/\s+/).filter(t => t.length > 0);
+  if (terms.length === 0) return [];
+  
+  const results: GCalEvent[] = [];
+  
+  for (const event of indexedEvents.values()) {
+    const title = (event.summary || "").toLowerCase();
+    const description = (event.description || "").toLowerCase();
+    const location = (event.location || "").toLowerCase();
+    const searchable = `${title} ${description} ${location}`;
     
-    if (!searchQuery) return [];
-    
-    const results = searchIndex.search(searchQuery);
-    
-    // Map results back to events
-    return results
-      .map(result => indexedEvents.get(result.ref))
-      .filter((event): event is GCalEvent => event !== undefined);
-  } catch (error) {
-    // lunr throws on invalid queries, return empty results
-    console.error("Search error:", error);
-    return [];
+    // All terms must match somewhere in the event
+    const allMatch = terms.every(term => searchable.includes(term));
+    if (allMatch) {
+      results.push(event);
+    }
   }
+  
+  // Sort by title match quality (title matches first)
+  return results.sort((a, b) => {
+    const aTitle = (a.summary || "").toLowerCase();
+    const bTitle = (b.summary || "").toLowerCase();
+    const aInTitle = terms.every(t => aTitle.includes(t));
+    const bInTitle = terms.every(t => bTitle.includes(t));
+    
+    if (aInTitle && !bInTitle) return -1;
+    if (!aInTitle && bInTitle) return 1;
+    return 0;
+  });
 }
 
 /**

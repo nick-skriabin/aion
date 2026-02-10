@@ -13,6 +13,8 @@ import {
   searchResultsAtom,
   searchSelectedIndexAtom,
   focusAtom,
+  calendarColorMapAtom,
+  getCalendarColor,
 } from "../state/atoms.ts";
 import { getDisplayTitle } from "../domain/gcalEvent.ts";
 import { formatTime, getEventStart } from "../domain/time.ts";
@@ -70,6 +72,7 @@ export function SearchView() {
   const focus = useAtomValue(focusAtom);
   const results = useAtomValue(searchResultsAtom);
   const selectedIndex = useAtomValue(searchSelectedIndexAtom);
+  const calendarColorMap = useAtomValue(calendarColorMapAtom);
 
   // Build flat list with headers
   const { items, eventIndexMap } = useMemo(() => buildFlatList(results), [results]);
@@ -101,7 +104,7 @@ export function SearchView() {
           if (item.type === "header") {
             return (
               <Box key={`h-${i}`} style={{ height: 1, flexShrink: 0 }}>
-                <Text style={{ color: theme.accent.primary, bold: true }}>
+                <Text style={{ color: theme.text.dim }}>
                   {item.dateLabel}
                 </Text>
               </Box>
@@ -112,6 +115,7 @@ export function SearchView() {
             const start = getEventStart(event);
             const timeStr = event.start?.date ? "all-day" : formatTime(start);
             const title = getDisplayTitle(event);
+            const eventColor = getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap);
             const line = `${timeStr.padEnd(8)}${isSelected ? "▸ " : "  "}${title}`;
 
             return (
@@ -125,7 +129,7 @@ export function SearchView() {
               >
                 <Text
                   style={{
-                    color: isSelected ? theme.selection.text : theme.text.primary,
+                    color: isSelected ? theme.selection.text : eventColor,
                     bold: isSelected,
                   }}
                 >
