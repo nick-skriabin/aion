@@ -140,6 +140,11 @@ Aion requires your own Google Cloud credentials to access Google Calendar. Here'
 3. If prompted, configure the OAuth consent screen:
    - User Type: **External** (or Internal for Workspace)
    - Add your email as a test user
+   - Add the following scopes:
+     - `https://www.googleapis.com/auth/calendar.events` (read/write events)
+     - `https://www.googleapis.com/auth/calendar.readonly` (read calendars list)
+     - `https://www.googleapis.com/auth/userinfo.email` (get user email)
+     - `https://www.googleapis.com/auth/userinfo.profile` (get user name/picture)
 4. Create OAuth client ID:
    - Application type: **Desktop app**
    - Name: "Aion" (or anything you like)
