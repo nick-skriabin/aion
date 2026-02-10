@@ -44,7 +44,9 @@ needsAction = "blackBright"
 let cachedConfig: Config | null = null;
 
 export async function loadConfig(): Promise<Config> {
-  if (cachedConfig) return cachedConfig;
+  if (cachedConfig) {
+    return cachedConfig;
+  }
 
   // Ensure directories exist
   await ensureDirectories();
@@ -55,6 +57,7 @@ export async function loadConfig(): Promise<Config> {
       const content = await file.text();
       const parsed = TOML.parse(content);
       cachedConfig = ConfigSchema.parse(parsed);
+      appLogger.debug("Loaded config from file", { columns: cachedConfig.view.columns });
     } else {
       cachedConfig = ConfigSchema.parse({});
     }
@@ -68,8 +71,9 @@ export async function loadConfig(): Promise<Config> {
 
 export function getConfig(): Config {
   if (!cachedConfig) {
-    // Sync fallback - should call loadConfig() first
-    cachedConfig = ConfigSchema.parse({});
+    // Sync fallback - return defaults but DON'T cache them
+    // This allows loadConfig() to properly load from file later
+    return ConfigSchema.parse({});
   }
   return cachedConfig;
 }
@@ -80,5 +84,29 @@ export async function createDefaultConfig(): Promise<void> {
     await Bun.write(CONFIG_FILE, DEFAULT_CONFIG_TOML);
   } catch {
     // Ignore errors
+  }
+}
+
+// Update a specific config value and save to disk
+export async function updateConfig(updates: Partial<Config>): Promise<void> {
+  const current = getConfig();
+  
+  // Deep merge updates
+  const updated = {
+    ...current,
+    ...updates,
+    theme: { ...current.theme, ...updates.theme },
+    google: { ...current.google, ...updates.google },
+    view: { ...current.view, ...updates.view },
+  };
+  
+  cachedConfig = updated;
+  
+  try {
+    await ensureDirectories();
+    const tomlContent = TOML.stringify(updated as Record<string, unknown>);
+    await Bun.write(CONFIG_FILE, tomlContent);
+  } catch (error) {
+    appLogger.error("Failed to save config", error);
   }
 }

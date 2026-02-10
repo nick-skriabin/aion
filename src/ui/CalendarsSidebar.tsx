@@ -106,8 +106,8 @@ function CalendarsKeybinds({
       return;
     }
     
-    // Tab or l to move focus to days
-    if (key.name === "tab" || key.name === "l") {
+    // Backtick to move focus to days
+    if (key.sequence === "`") {
       handlers.close();
       return;
     }

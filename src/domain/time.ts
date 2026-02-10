@@ -90,6 +90,14 @@ export function formatDayHeader(dt: DateTime): string {
   return dt.toFormat("cccc, MMMM d"); // e.g., "Monday, February 5"
 }
 
+// Format hour label for timeline
+export function formatHourLabel(hour: number): string {
+  if (hour === 0 || hour === 24) return "12 AM";
+  if (hour === 12) return "12 PM";
+  if (hour < 12) return `${hour} AM`;
+  return `${hour - 12} PM`;
+}
+
 // Check if two dates are the same day
 export function isSameDay(a: DateTime, b: DateTime): boolean {
   return a.hasSame(b, "day");

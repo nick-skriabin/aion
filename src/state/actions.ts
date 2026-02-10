@@ -6,6 +6,7 @@ import { findNearestEvent } from "../domain/layout.ts";
 import { getNowMinutes, getLocalTimezone } from "../domain/time.ts";
 import { eventsRepo } from "../db/eventsRepo.ts";
 import { appLogger } from "../lib/logger.ts";
+import { getConfig, updateConfig } from "../config/config.ts";
 import {
   eventsAtom,
   selectedDayAtom,
@@ -21,7 +22,6 @@ import {
   addGoogleMeetAtom,
   pendingActionAtom,
   dayLayoutAtom,
-  dayEventsAtom,
   messageAtom,
   messageVisibleAtom,
   sidebarHeightAtom,
@@ -29,6 +29,9 @@ import {
   timezoneAtom,
   calendarsAtom,
   calendarSidebarVisibleAtom,
+  columnCountAtom,
+  focusedColumnAtom,
+  focusedColumnEventsAtom,
   type FocusContext,
   type Overlay,
   type OverlayKind,
@@ -115,12 +118,14 @@ export const toggleFocusAtom = atom(null, (get, set) => {
 
 // Move day selection (for sidebar)
 // Also shifts the visible range when selection goes near edges
+// In multi-column view, ensures the entire group (selectedDay + columnCount-1) is visible
 export const moveDaySelectionAtom = atom(
   null,
   (get, set, direction: "up" | "down" | "start" | "end") => {
     const selectedDay = get(selectedDayAtom);
     const anchor = get(viewAnchorDayAtom);
     const sidebarHeight = get(sidebarHeightAtom);
+    const columnCount = get(columnCountAtom);
     
     // Calculate visible range bounds (days before/after anchor)
     const halfDays = Math.floor(sidebarHeight / 2);
@@ -149,11 +154,17 @@ export const moveDaySelectionAtom = atom(
     
     set(selectedDayAtom, newDay);
     
-    // Shift anchor if new day is outside visible range
+    // In multi-column view, we need to ensure the last day of the group is visible
+    // The group spans from newDay to newDay + (columnCount - 1)
+    const lastDayOfGroup = newDay.plus({ days: columnCount - 1 });
+    
+    // Shift anchor if new day or last day of group is outside visible range
     const diffFromAnchor = newDay.diff(anchor, "days").days;
-    if (diffFromAnchor > daysAfter) {
-      // Selection went past the end - shift anchor forward
-      set(viewAnchorDayAtom, newDay.minus({ days: daysAfter }));
+    const lastDayDiff = lastDayOfGroup.diff(anchor, "days").days;
+    
+    if (lastDayDiff > daysAfter) {
+      // Group's last day went past the end - shift anchor forward
+      set(viewAnchorDayAtom, lastDayOfGroup.minus({ days: daysAfter }));
     } else if (diffFromAnchor < -daysBefore) {
       // Selection went past the start - shift anchor backward
       set(viewAnchorDayAtom, newDay.plus({ days: daysBefore }));
@@ -179,7 +190,7 @@ export const confirmDaySelectionAtom = atom(null, (get, set) => {
 export const moveEventSelectionAtom = atom(
   null,
   (get, set, direction: "next" | "prev" | "first" | "last") => {
-    const events = get(dayEventsAtom);
+    const events = get(focusedColumnEventsAtom);
     const currentId = get(selectedEventIdAtom);
     
     if (events.length === 0) return;
@@ -263,6 +274,64 @@ export const toggleCalendarSidebarAtom = atom(null, (get, set) => {
     // If closing, return focus to days
     set(focusAtom, "days");
   }
+});
+
+// Load view settings from config
+export const loadViewSettingsAtom = atom(null, (get, set) => {
+  const config = getConfig();
+  set(columnCountAtom, config.view.columns);
+});
+
+// Toggle between 1 and 3 column view
+export const toggleColumnsAtom = atom(null, (get, set) => {
+  const current = get(columnCountAtom);
+  const newCount = current === 1 ? 3 : 1;
+  set(columnCountAtom, newCount);
+  set(focusedColumnAtom, 0); // Reset to first column when toggling
+  
+  // Persist to config (fire and forget)
+  updateConfig({ view: { columns: newCount } });
+});
+
+// Move focus between columns (h/l or arrow keys)
+// In multi-column: moves between columns, at edges shifts the view
+// In single-column: navigates to prev/next day
+export const moveColumnAtom = atom(null, (get, set, direction: "left" | "right") => {
+  const columnCount = get(columnCountAtom);
+  const currentColumn = get(focusedColumnAtom);
+  const selectedDay = get(selectedDayAtom);
+  
+  if (columnCount === 1) {
+    // Single-column mode: just navigate days
+    if (direction === "left") {
+      set(selectedDayAtom, selectedDay.minus({ days: 1 }));
+    } else {
+      set(selectedDayAtom, selectedDay.plus({ days: 1 }));
+    }
+    return;
+  }
+  
+  // Multi-column mode
+  if (direction === "left") {
+    if (currentColumn > 0) {
+      // Move to previous column
+      set(focusedColumnAtom, currentColumn - 1);
+    } else {
+      // At first column, shift the view left (go to previous day)
+      set(selectedDayAtom, selectedDay.minus({ days: 1 }));
+      // Stay at column 0
+    }
+  } else {
+    if (currentColumn < columnCount - 1) {
+      // Move to next column
+      set(focusedColumnAtom, currentColumn + 1);
+    } else {
+      // At last column, shift the view right (go to next day)
+      set(selectedDayAtom, selectedDay.plus({ days: 1 }));
+      // Stay at last column
+    }
+  }
+  // Don't clear selectedEventId - let the new column's auto-select handle it
 });
 
 // ===== Event Actions =====
@@ -875,6 +944,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
       break;
     case "toggleCalendars":
       set(toggleCalendarSidebarAtom);
+      break;
+    case "toggleColumns":
+      set(toggleColumnsAtom);
       break;
     case "openGoto":
       set(openGotoDialogAtom);

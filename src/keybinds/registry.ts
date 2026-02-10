@@ -13,11 +13,13 @@ export type KeybindScope = FocusContext | "global";
 // Central registry of all keybinds
 export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
   global: [
+    { key: "`", display: "`", description: "Switch focus (days/timeline)", action: "toggleFocus" },
     { key: "?", display: "?", description: "Show keyboard shortcuts", action: "openHelp", command: "help" },
     { key: "shift+n", display: "N", description: "Open notifications", action: "openNotifications", command: "notifications" },
     { key: "ctrl+n", display: "Ctrl+n", description: "Create new event", action: "newEvent", command: "new" },
     { key: "a", display: "a", description: "Toggle all-day events", action: "toggleAllDay", command: "allday" },
     { key: "shift+c", display: "C", description: "Toggle calendars sidebar", action: "toggleCalendars", command: "calendars" },
+    { key: "3", display: "3", description: "Toggle 3-day view", action: "toggleColumns", command: "3day" },
     { key: "ctrl+g", display: "Ctrl+g", description: "Go to date", action: "openGoto", command: "goto" },
     { key: "ctrl+m", display: "Ctrl+m", description: "Meet with...", action: "openMeetWith", command: "meet" },
     { key: "escape", display: "Esc", description: "Close overlay / go back", action: "popOverlay" },
@@ -40,8 +42,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "up", display: "k / ↑", description: "Previous calendar", action: "prevCalendar" },
     { key: "space", display: "Space", description: "Toggle calendar visibility", action: "toggleCalendar" },
     { key: "return", display: "Enter", description: "Toggle calendar visibility", action: "toggleCalendar" },
-    { key: "tab", display: "Tab", description: "Move to days list", action: "focusDays" },
-    { key: "l", display: "l", description: "Move to days list", action: "focusDays" },
+    { key: "`", display: "`", description: "Move to days list", action: "focusDays" },
   ],
 
   days: [
@@ -52,9 +53,8 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "g", display: "g", description: "Go to first day", action: "firstDay" },
     { key: "shift+g", display: "G", description: "Go to last day", action: "lastDay" },
     { key: "return", display: "Enter", description: "Select day and focus timeline", action: "confirmDay" },
-    { key: "h", display: "h / l", description: "Switch to timeline", action: "toggleFocus" },
-    { key: "l", display: "h / l", description: "Switch to timeline", action: "toggleFocus" },
-    { key: "tab", display: "Tab", description: "Switch to timeline", action: "toggleFocus" },
+    { key: "space", display: "Space", description: "Select day and focus timeline", action: "confirmDay" },
+    { key: "`", display: "`", description: "Switch to timeline", action: "toggleFocus" },
   ],
 
   timeline: [
@@ -64,6 +64,10 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "up", display: "k / ↑", description: "Previous event", action: "prevEvent" },
     { key: "g", display: "gg", description: "First event", action: "firstEvent" },
     { key: "shift+g", display: "G", description: "Last event", action: "lastEvent" },
+    { key: "h", display: "h / ←", description: "Previous day/column", action: "prevColumn" },
+    { key: "left", display: "h / ←", description: "Previous day/column", action: "prevColumn" },
+    { key: "l", display: "l / →", description: "Next day/column", action: "nextColumn" },
+    { key: "right", display: "l / →", description: "Next day/column", action: "nextColumn" },
     { key: "n", display: "n", description: "Jump to now", action: "jumpToNow", command: "now" },
     { key: "return", display: "Enter", description: "Open event details", action: "openDetails" },
     { key: "space", display: "Space", description: "Open event details", action: "openDetails" },
@@ -71,9 +75,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "p", display: "p", description: "Propose new time", action: "proposeNewTime" },
     { key: "shift+d", display: "D", description: "Delete event", action: "deleteEvent", command: "delete" },
     { key: ":", display: ":", description: "Open command bar", action: "openCommand" },
-    { key: "h", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
-    { key: "l", display: "h / l", description: "Switch to days sidebar", action: "toggleFocus" },
-    { key: "tab", display: "Tab", description: "Switch to days sidebar", action: "toggleFocus" },
+    { key: "`", display: "`", description: "Switch to days sidebar", action: "toggleFocus" },
   ],
 
   details: [

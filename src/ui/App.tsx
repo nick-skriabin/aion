@@ -16,7 +16,7 @@ import { MeetWithDialog } from "./MeetWithDialog.tsx";
 import { AccountsDialog } from "./AccountsDialog.tsx";
 import { SearchView } from "./SearchView.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
-import { loadEventsAtom, checkAuthStatusAtom, rebuildSearchIndexAtom, loadCalendarCacheAtom } from "../state/actions.ts";
+import { loadEventsAtom, checkAuthStatusAtom, rebuildSearchIndexAtom, loadCalendarCacheAtom, loadViewSettingsAtom } from "../state/actions.ts";
 import { getDisabledCalendars } from "../config/calendarSettings.ts";
 import { initDb } from "../db/db.ts";
 import { loadConfig } from "../config/config.ts";
@@ -65,6 +65,7 @@ function AppContent() {
   const loadEvents = useSetAtom(loadEventsAtom);
   const checkAuthStatus = useSetAtom(checkAuthStatusAtom);
   const loadCalendarCache = useSetAtom(loadCalendarCacheAtom);
+  const loadViewSettings = useSetAtom(loadViewSettingsAtom);
   const setDisabledCalendars = useSetAtom(enabledCalendarsAtom);
   const setCalendarsLoaded = useSetAtom(enabledCalendarsLoadedAtom);
   const isLoggedIn = useAtomValue(isLoggedInAtom);
@@ -76,6 +77,7 @@ function AppContent() {
       try {
         // Critical path: config, db, and cached calendars (for colors)
         await loadConfig();
+        loadViewSettings(); // Apply view settings from config
         await initDb();
 
         // Load calendar cache + events from DB in parallel (all local, instant)
@@ -100,7 +102,7 @@ function AppContent() {
     }
 
     fastInit();
-  }, [loadEvents, checkAuthStatus, loadCalendarCache, setDisabledCalendars, setCalendarsLoaded]);
+  }, [loadEvents, checkAuthStatus, loadCalendarCache, loadViewSettings, setDisabledCalendars, setCalendarsLoaded]);
 
   if (!ready) {
     return (
@@ -170,7 +172,7 @@ function AppContent() {
             )}
           </Box>
           <Text style={{ color: theme.text.dim }}>
-            /:search  C-g:goto  C:calendars  ?:help
+            /:search  3:3day  C-g:goto  C:calendars  ?:help
           </Text>
         </Box>
 

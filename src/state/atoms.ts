@@ -70,6 +70,17 @@ export const searchResultsAtom = atom<GCalEvent[]>([]);
 // Selected index in search results
 export const searchSelectedIndexAtom = atom<number>(0);
 
+// ===== Multi-Day View =====
+
+// Number of columns to display (1 or 3)
+export const columnCountAtom = atom<number>(1);
+
+// Currently focused column (0-indexed, 0 = main column)
+export const focusedColumnAtom = atom<number>(0);
+
+// Shared scroll offset for synchronized timeline scrolling (slot index)
+export const sharedScrollOffsetAtom = atom<number>(7 * 4); // Default to 7 AM (7 hours * 4 slots/hour)
+
 // ===== Calendar Sidebar =====
 
 // Whether the calendar sidebar is visible
@@ -267,6 +278,35 @@ export const dayEventsAtom = atom((get) => {
   return getChronologicalEvents(layout);
 });
 
+// Get the day for the currently focused column
+export const focusedColumnDayAtom = atom((get) => {
+  const selectedDay = get(selectedDayAtom);
+  const focusedColumn = get(focusedColumnAtom);
+  return selectedDay.plus({ days: focusedColumn });
+});
+
+// Get events for the currently focused column (respects all-day collapse state)
+const ALL_DAY_COLLAPSE_THRESHOLD = 2;
+
+export const focusedColumnEventsAtom = atom((get) => {
+  const events = get(filteredEventsArrayAtom);
+  const day = get(focusedColumnDayAtom);
+  const tz = get(timezoneAtom);
+  const allDayExpanded = get(allDayExpandedAtom);
+  const layout = layoutDay(events, day, tz);
+  
+  // When collapsed, only include visible all-day events
+  const shouldCollapse = layout.allDayEvents.length > ALL_DAY_COLLAPSE_THRESHOLD && !allDayExpanded;
+  const visibleAllDayEvents = shouldCollapse 
+    ? layout.allDayEvents.slice(0, ALL_DAY_COLLAPSE_THRESHOLD)
+    : layout.allDayEvents;
+  
+  return [
+    ...visibleAllDayEvents,
+    ...layout.timedEvents.map((l) => l.event),
+  ];
+});
+
 // Get layout for the selected day
 export const dayLayoutAtom = atom((get): DayLayout => {
   const events = get(filteredEventsArrayAtom);
@@ -274,6 +314,11 @@ export const dayLayoutAtom = atom((get): DayLayout => {
   const tz = get(timezoneAtom);
   return layoutDay(events, day, tz);
 });
+
+// Helper function to create a layout for any day
+export function createDayLayout(events: GCalEvent[], day: DateTime, tz: string): DayLayout {
+  return layoutDay(events, day, tz);
+}
 
 // Available height for the days sidebar (set by DaysSidebar component)
 export const sidebarHeightAtom = atom<number>(15); // Default fallback

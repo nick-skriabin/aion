@@ -83,7 +83,7 @@ const GoogleSchema = z.object({
 
 // View configuration
 const ViewSchema = z.object({
-  columns: z.number().min(1).max(5).default(3),
+  columns: z.number().min(1).max(5).default(1),
 }).default({});
 
 // Full config schema
