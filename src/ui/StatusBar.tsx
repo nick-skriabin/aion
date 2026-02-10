@@ -144,14 +144,9 @@ function CommandInput() {
   }, [input, setSelectedIndex]);
 
   const selectCommand = useCallback(() => {
-    const selected = getSelectedCommand(input, selectedIndex);
-    if (selected) {
-      setInput(selected.name.replace(/ <.*>$/, ""));
-      setTimeout(() => executeCommand(), 0);
-    } else {
-      executeCommand();
-    }
-  }, [input, selectedIndex, setInput, executeCommand]);
+    // Just execute the command directly - don't modify the input
+    executeCommand();
+  }, [executeCommand]);
 
   // Auto-fill the selected command into the input (Tab or Ctrl+Y)
   const autoFillCommand = useCallback(() => {
@@ -198,7 +193,7 @@ function CommandInput() {
         <Text style={{ color: theme.accent.primary, bold: true }}>:</Text>
         <Input
           key="command-input"
-          defaultValue=""
+          value={input}
           placeholder="Type commands here"
           onChange={setInput}
           onKeyPress={handleKeyPress}

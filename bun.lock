@@ -6,7 +6,7 @@
       "name": "aion",
       "dependencies": {
         "@iarna/toml": "^2.2.5",
-        "@nick-skriabin/glyph": "^0.1.46",
+        "@nick-skriabin/glyph": "^0.1.48",
         "chrono-node": "^2.9.0",
         "drizzle-orm": "^0.38.3",
         "jotai": "^2.10.4",
@@ -85,7 +85,7 @@
 
     "@iarna/toml": ["@iarna/toml@2.2.5", "", {}, "sha512-trnsAYxU3xnS1gPHPyU961coFyLkh4gAD/0zQ5mymY4yOZ+CYvsPqUbOFSw0aDM4y0tV7tiFxL/1XfXPNC6IPg=="],
 
-    "@nick-skriabin/glyph": ["@nick-skriabin/glyph@0.1.46", "", { "dependencies": { "react-reconciler": "^0.31.0", "string-width": "^7.2.0", "yoga-layout": "^3.2.1" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-XKG8SpwUnTeJxVdvPL5lgzTDzJDlpLADNdrCrXNi23RKqsHroZe27Iw9inVzldezJPqPTdjZQ49h+GB16UNrcA=="],
+    "@nick-skriabin/glyph": ["@nick-skriabin/glyph@0.1.48", "", { "dependencies": { "react-reconciler": "^0.31.0", "string-width": "^7.2.0", "yoga-layout": "^3.2.1" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-fhYCSKd4WSIgKjCVP94LAu+F7MGk8bYOQG8qWoCjKZLUJIGwFkAY1o7U1PuAmcbzgWOxCmmq07e4UFDjWA0HoQ=="],
 
     "@petamoriken/float16": ["@petamoriken/float16@3.9.3", "", {}, "sha512-8awtpHXCx/bNpFt4mt2xdkgtgVvKqty8VbjHI/WWWQuEw+KLzFot3f4+LkQY9YmOtq7A5GdOnqoIC8Pdygjk2g=="],
 
