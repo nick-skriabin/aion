@@ -306,6 +306,7 @@ function SlotsView({
 
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
+      if (!slot) continue;
       const prevSlot = i > 0 ? slots[i - 1] : null;
 
       // Check if there's a gap (busy time) before this slot
@@ -365,7 +366,7 @@ function SlotsView({
   const renderTimelineBar = (slot: TimeSlot) => {
     const barWidth = 16;
     const slotDayStr = slot.start.toFormat("yyyy-MM-dd");
-    const localZone = slot.start.zoneName;
+    const localZone = slot.start.zoneName ?? "local";
 
     // Find all slots for this day to determine the time range to show
     const daySlotsHours = slots
@@ -684,12 +685,13 @@ export function MeetWithDialog() {
 
       // Get the first account to create the event
       const accounts = await getAccounts();
-      if (accounts.length === 0) {
+      const firstAccount = accounts[0];
+      if (!firstAccount) {
         showMessage({ text: "No accounts available", type: "error" });
         return;
       }
 
-      const accountEmail = accounts[0].account.email;
+      const accountEmail = firstAccount.account.email;
 
       // Create the event with attendees
       const attendees = meetWithState.selectedPeople.map((p) => ({

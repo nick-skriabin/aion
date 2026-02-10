@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Box, Text, Portal, ScrollView, FocusScope, Keybind } from "@nick-skriabin/glyph";
+import { Box, Text, Portal, ScrollView, FocusScope, Keybind, type Color } from "@nick-skriabin/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { convert } from "html-to-text";
 import { selectedEventAtom, timezoneAtom, focusAtom, calendarColorMapAtom, getCalendarColor, calendarsAtom } from "../state/atoms.ts";
@@ -40,7 +40,7 @@ const PANEL_WIDTH = 48;
 function formatTimezoneShort(tz: string): string {
   const parts = tz.split("/");
   // Get the last part and replace underscores with spaces
-  const location = parts[parts.length - 1].replace(/_/g, " ");
+  const location = (parts[parts.length - 1] ?? tz).replace(/_/g, " ");
   return location;
 }
 
@@ -278,7 +278,7 @@ export function DetailsPanel() {
               {event.accountEmail && (
                 <Row label="account">
                   <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
-                    <Text style={{ color: getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap) }}>●</Text>
+                    <Text style={{ color: getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap) as Color }}>●</Text>
                     <Text style={{ color: theme.text.secondary }} wrap="truncate">
                       {event.accountEmail}
                     </Text>
@@ -417,7 +417,7 @@ export function DetailsPanel() {
             )}
             
             {/* Reminders */}
-            {reminders.length > 0 && (
+            {reminders.length > 0 && reminders[0] && (
               <>
                 <Row label="remind">
                   <Text style={{ color: theme.text.secondary }}>

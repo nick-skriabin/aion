@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from "react";
-import { Box, Text } from "@nick-skriabin/glyph";
+import { Box, Text, type Color } from "@nick-skriabin/glyph";
 import { useAtomValue } from "jotai";
 import { DateTime } from "luxon";
 import {
@@ -94,8 +94,6 @@ export function SearchView() {
       style={{
         flexDirection: "column",
         paddingX: 1,
-        borderTop: "single",
-        borderColor: theme.text.dim,
       }}
     >
       {/* List with Box-based layout, each row has explicit height: 1 */}
@@ -115,7 +113,7 @@ export function SearchView() {
             const start = getEventStart(event);
             const timeStr = event.start?.date ? "all-day" : formatTime(start);
             const title = getDisplayTitle(event);
-            const eventColor = getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap);
+            const eventColor = getCalendarColor(event.accountEmail, event.calendarId, calendarColorMap) as Color;
             const line = `${timeStr.padEnd(8)}${isSelected ? "▸ " : "  "}${title}`;
 
             return (

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Box, Text, useFocusable } from "@nick-skriabin/glyph";
+import { Box, Text, useFocusable, type Color } from "@nick-skriabin/glyph";
 import { theme } from "./theme.ts";
 import { type Weekday } from "../domain/recurrence.ts";
 
@@ -27,7 +27,9 @@ export function WeekdayPicker({ value, onChange }: WeekdayPickerProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
 
   const toggleDay = () => {
-    const day = WEEKDAYS[focusedIndex].key;
+    const dayItem = WEEKDAYS[focusedIndex];
+    if (!dayItem) return;
+    const day = dayItem.key;
     const isSelected = value.includes(day);
     if (isSelected) {
       onChange(value.filter((d) => d !== day));
@@ -68,15 +70,15 @@ export function WeekdayPicker({ value, onChange }: WeekdayPickerProps) {
         const isSelected = value.includes(day.key);
         const isCellFocused = isFocused && index === focusedIndex;
 
-        let bg: string | undefined;
-        let color: string;
+        let bg: Color | undefined;
+        let color: Color;
 
         if (isSelected) {
           color = theme.accent.primary; // green
-          bg = isCellFocused ? "#2a2a2a" : undefined;
+          bg = isCellFocused ? "#2a2a2a" as const : undefined;
         } else {
           color = theme.text.dim; // gray
-          bg = isCellFocused ? "#2a2a2a" : undefined;
+          bg = isCellFocused ? "#2a2a2a" as const : undefined;
         }
 
         return (

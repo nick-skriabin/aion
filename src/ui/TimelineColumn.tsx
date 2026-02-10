@@ -512,7 +512,8 @@ export function TimelineColumn({ day, columnIndex, maxAllDayCount, allDayLines, 
         const nearestEvent = findNearestEvent(layout, nowMinutes);
         if (nearestEvent) setSelectedEventId(nearestEvent.id);
       } else {
-        setSelectedEventId(events[0].id);
+        const firstEvent = events[0];
+        if (firstEvent) setSelectedEventId(firstEvent.id);
       }
     }
   }, [events, selectedEventId, setSelectedEventId, isTodayView, nowMinutes, layout, isColumnFocused]);
@@ -527,7 +528,6 @@ export function TimelineColumn({ day, columnIndex, maxAllDayCount, allDayLines, 
     <Box
       style={{
         flexGrow: 1,
-        flexBasis: 0,
         width: 0,
         height: "100%",
         flexDirection: "column",

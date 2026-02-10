@@ -111,7 +111,7 @@ function DaysList() {
 
         // Determine text color based on state
         const getTextColor = () => {
-          if (isSelected && isFocused) return theme.selection.indicator;
+          if (isSelected && isFocused) return theme.selection.text;
           if (isCurrentDay) return theme.accent.success;
           if (isSelected) return theme.text.primary;
           if (isInVisibleGroup && !isSelected) return theme.text.primary;
@@ -130,7 +130,7 @@ function DaysList() {
         return (
           <Box key={day.toISO()} style={{ flexDirection: "row" }}>
             {/* Group border indicator */}
-            <Text style={{ color: isInVisibleGroup ? theme.accent.primary : "transparent" }}>
+            <Text style={{ color: isInVisibleGroup ? theme.accent.primary : theme.text.dim, dim: !isInVisibleGroup }}>
               {getBorderChar()}
             </Text>
             <Text

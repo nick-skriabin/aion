@@ -13,6 +13,7 @@ import {
   useApp,
   createMask,
   type Style,
+  type Color,
   JumpNav,
 } from "@nick-skriabin/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
@@ -488,7 +489,7 @@ export function EventDialog() {
                 {/* Calendar */}
                 <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
                   <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>calendar</Text>
-                  <Text style={{ color: getCalendarColor(accountEmail, calendarId || calendarsForAccount.find(c => c.primary)?.id, calendarColorMap) }}>●</Text>
+                  <Text style={{ color: getCalendarColor(accountEmail, calendarId || calendarsForAccount.find(c => c.primary)?.id, calendarColorMap) as Color }}>●</Text>
                   <Select
                     items={calendarsForAccount.map((cal) => ({
                       label: cal.primary ? `★ ${cal.summary}` : cal.summary,
@@ -558,7 +559,7 @@ export function EventDialog() {
                     </Box>
                   </Box>
                   {whenPreview && (
-                    <Box style={{ flexDirection: "row", gap: 1, marginLeft: LABEL_WIDTH + 1 }}>
+                    <Box style={{ flexDirection: "row", gap: 1, paddingLeft: LABEL_WIDTH + 1 }}>
                       <Text style={{ color: theme.accent.success, dim: true }}>
                         → {formatParsedPreview(whenPreview)} (Enter to apply)
                       </Text>

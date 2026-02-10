@@ -77,8 +77,11 @@ export function ProposeTimeDialog() {
     const eventKey = dialogEvent.id || "new";
     if (initializedEventIdRef.current === eventKey) return;
     initializedEventIdRef.current = eventKey;
+    
+    // Ensure we have required fields
+    if (!dialogEvent.start || !dialogEvent.end) return;
 
-    const allDay = checkIsAllDay(dialogEvent);
+    const allDay = dialogEvent.start.date && !dialogEvent.start.dateTime;
     const start = parseTimeObject(dialogEvent.start, tz);
     const end = parseTimeObject(dialogEvent.end, tz);
 
@@ -163,19 +166,19 @@ export function ProposeTimeDialog() {
     return false;
   }, [handleSend]);
 
-  if (!dialogEvent) return null;
+  if (!dialogEvent || !dialogEvent.start) return null;
 
-  const eventTitle = getDisplayTitle(dialogEvent);
+  const eventTitle = dialogEvent.summary?.trim() || "(No title)";
   const organizer = dialogEvent.organizer?.displayName || dialogEvent.organizer?.email || "Unknown";
-  const isAllDay = checkIsAllDay(dialogEvent);
+  const isAllDay = dialogEvent.start.date && !dialogEvent.start.dateTime;
 
   const inputStyle = {
     bg: theme.input.background,
-    color: theme.input.foreground,
+    color: theme.input.text,
   };
   
   const focusedInputStyle = {
-    bg: "#3a3a3a",
+    bg: "#3a3a3a" as const,
     color: "white" as const,
   };
 
@@ -245,7 +248,7 @@ export function ProposeTimeDialog() {
                   </Box>
                 </Box>
                 {whenPreview && (
-                  <Box style={{ flexDirection: "row", gap: 1, marginLeft: LABEL_WIDTH + 1 }}>
+                  <Box style={{ flexDirection: "row", gap: 1, paddingLeft: LABEL_WIDTH + 1 }}>
                     <Text style={{ color: theme.accent.success, dim: true }}>
                       → {formatParsedPreview(whenPreview)} (Enter)
                     </Text>
@@ -312,7 +315,7 @@ export function ProposeTimeDialog() {
               </Box>
 
               {/* Optional message */}
-              <Box style={{ flexDirection: "row", gap: 1, marginTop: 1 }}>
+              <Box style={{ flexDirection: "row", gap: 1, paddingTop: 1 }}>
                 <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>message</Text>
                 <Box style={{ width: INPUT_WIDTH, clip: true }}>
                   <Input
