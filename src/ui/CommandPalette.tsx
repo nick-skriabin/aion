@@ -54,11 +54,13 @@ export function CommandPalette() {
   const filteredCommands = useMemo(() => {
     if (!input.trim()) return allCommands;
 
-    const search = input.toLowerCase().trim();
-    return allCommands.filter((cmd) =>
-      cmd.name.toLowerCase().includes(search) ||
-      cmd.description.toLowerCase().includes(search)
-    );
+    // Only match against the first word (command name), not arguments
+    const firstWord = input.toLowerCase().trim().split(/\s+/)[0];
+    return allCommands.filter((cmd) => {
+      const cmdName = cmd.name.split(" ")[0]; // Get command name without args placeholder
+      return cmdName.toLowerCase().includes(firstWord) ||
+        cmd.description.toLowerCase().includes(firstWord);
+    });
   }, [allCommands, input]);
 
   // Reset selection when filter changes
@@ -102,7 +104,7 @@ export function CommandPalette() {
         <Text style={{ color: theme.text.dim }}>
           Commands ({filteredCommands.length})
         </Text>
-        <Text style={{ color: theme.text.dim }}>↑↓ C-p/n</Text>
+        <Text style={{ color: theme.text.dim }}>↑↓ Tab:fill</Text>
       </Box>
 
       {/* Command list */}
@@ -129,13 +131,16 @@ export function CommandPalette() {
 // Get the currently selected command
 export function getSelectedCommand(input: string, selectedIndex: number) {
   const allCommands = getAllCommands();
-  const search = input.toLowerCase().trim();
+  
+  // Only match against the first word (command name), not arguments
+  const firstWord = input.toLowerCase().trim().split(/\s+/)[0];
 
-  const filteredCommands = search
-    ? allCommands.filter((cmd) =>
-      cmd.name.toLowerCase().includes(search) ||
-      cmd.description.toLowerCase().includes(search)
-    )
+  const filteredCommands = firstWord
+    ? allCommands.filter((cmd) => {
+        const cmdName = cmd.name.split(" ")[0]; // Get command name without args placeholder
+        return cmdName.toLowerCase().includes(firstWord) ||
+          cmd.description.toLowerCase().includes(firstWord);
+      })
     : allCommands;
 
   return filteredCommands[selectedIndex] || null;

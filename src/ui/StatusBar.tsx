@@ -125,11 +125,13 @@ function CommandInput() {
   const allCommands = useMemo(() => getAllCommands(), []);
   const filteredCommands = useMemo(() => {
     if (!input.trim()) return allCommands;
-    const search = input.toLowerCase().trim();
-    return allCommands.filter((cmd) =>
-      cmd.name.toLowerCase().includes(search) ||
-      cmd.description.toLowerCase().includes(search)
-    );
+    // Only match against the first word (command name), not arguments
+    const firstWord = input.toLowerCase().trim().split(/\s+/)[0];
+    return allCommands.filter((cmd) => {
+      const cmdName = cmd.name.split(" ")[0]; // Get command name without args placeholder
+      return cmdName.toLowerCase().includes(firstWord) ||
+        cmd.description.toLowerCase().includes(firstWord);
+    });
   }, [allCommands, input]);
 
   // Reset selection when input changes
@@ -151,22 +153,44 @@ function CommandInput() {
     }
   }, [input, selectedIndex, setInput, executeCommand]);
 
+  // Auto-fill the selected command into the input (Tab or Ctrl+Y)
+  const autoFillCommand = useCallback(() => {
+    const selected = getSelectedCommand(input, selectedIndex);
+    if (selected) {
+      // Get command name without the args placeholder, add space for args
+      const cmdName = selected.name.replace(/ <.*>$/, "");
+      setInput(cmdName + " ");
+    }
+  }, [input, selectedIndex, setInput]);
+
   const handleKeyPress = useCallback((key: { name: string; ctrl?: boolean; shift?: boolean; sequence?: string }) => {
     // Ctrl combinations via sequence
     const isCtrlP = key.sequence === "\x10";
     const isCtrlN = key.sequence === "\x0e";
     const isCtrlY = key.sequence === "\x19";
 
-    if (key.name === "return" || isCtrlY) {
+    if (key.name === "return") {
       selectCommand();
-    } else if (key.name === "escape") {
-      popOverlay();
-    } else if (key.name === "up" || isCtrlP) {
-      setSelectedIndex((i) => Math.max(0, i - 1));
-    } else if (key.name === "down" || isCtrlN) {
-      setSelectedIndex((i) => Math.min(filteredCommands.length - 1, i + 1));
+      return true;
     }
-  }, [selectCommand, popOverlay, setSelectedIndex, filteredCommands.length]);
+    if (key.name === "tab" || isCtrlY) {
+      autoFillCommand();
+      return true;
+    }
+    if (key.name === "escape") {
+      popOverlay();
+      return true;
+    }
+    if (key.name === "up" || isCtrlP) {
+      setSelectedIndex((i) => Math.max(0, i - 1));
+      return true;
+    }
+    if (key.name === "down" || isCtrlN) {
+      setSelectedIndex((i) => Math.min(filteredCommands.length - 1, i + 1));
+      return true;
+    }
+    return false;
+  }, [selectCommand, autoFillCommand, popOverlay, setSelectedIndex, filteredCommands.length]);
 
   return (
     <FocusScope trap>

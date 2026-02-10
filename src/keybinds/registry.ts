@@ -184,6 +184,7 @@ export function getAllCommands(): { name: string; description: string; action: s
   // Add commands with arguments (special cases)
   commands.push({ name: "new <title>", description: "Create event with title", action: "newEvent" });
   commands.push({ name: "goto <date>", description: "Go to date (e.g., 'goto tomorrow')", action: "gotoDate" });
+  commands.push({ name: "columns <n>", description: "Set columns (1, 3, or 5)", action: "setColumns" });
 
   return commands.sort((a, b) => a.name.localeCompare(b.name));
 }

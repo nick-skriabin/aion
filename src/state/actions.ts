@@ -293,6 +293,21 @@ export const toggleColumnsAtom = atom(null, (get, set) => {
   updateConfig({ view: { columns: newCount } });
 });
 
+// Set specific column count (1, 3, or 5)
+export const setColumnsAtom = atom(null, (get, set, count: number) => {
+  const validCounts = [1, 3, 5];
+  if (!validCounts.includes(count)) {
+    set(showMessageAtom, { text: `Invalid column count. Use 1, 3, or 5.`, type: "error" });
+    return;
+  }
+  
+  set(columnCountAtom, count);
+  set(focusedColumnAtom, 0); // Reset to first column
+  
+  // Persist to config (fire and forget)
+  updateConfig({ view: { columns: count } });
+});
+
 // Move focus between columns (h/l or arrow keys)
 // In multi-column: moves between columns, at edges shifts the view
 // In single-column: navigates to prev/next day
@@ -947,6 +962,14 @@ export const executeCommandAtom = atom(null, (get, set) => {
       break;
     case "toggleColumns":
       set(toggleColumnsAtom);
+      break;
+    case "setColumns":
+      if (cmd.args) {
+        const count = parseInt(cmd.args, 10);
+        if (!isNaN(count)) {
+          set(setColumnsAtom, count);
+        }
+      }
       break;
     case "openGoto":
       set(openGotoDialogAtom);
