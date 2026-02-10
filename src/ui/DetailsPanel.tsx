@@ -58,7 +58,7 @@ function formatUtcOffset(offsetMinutes: number): string {
 // Meeting link patterns for various video conferencing services
 const MEETING_LINK_PATTERNS = [
   /https?:\/\/meet\.google\.com\/[a-z-]+/i,                    // Google Meet
-  /https?:\/\/[a-z0-9-]*\.?zoom\.us\/[jw]\/\d+/i,              // Zoom
+  /https?:\/\/[a-z0-9-]*\.?zoom\.us\/[jw]\/[^\s]+/i,           // Zoom (includes ?pwd=... params)
   /https?:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s]+/i, // MS Teams
   /https?:\/\/[a-z0-9-]+\.webex\.com\/[^\s]+/i,                // Webex
   /https?:\/\/whereby\.com\/[^\s]+/i,                          // Whereby

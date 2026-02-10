@@ -172,7 +172,7 @@ function AppContent() {
             )}
           </Box>
           <Text style={{ color: theme.text.dim }}>
-            /:search  3:3day  C-g:goto  C:calendars  ?:help
+            /:search  C-g:goto  C:calendars  ?:help
           </Text>
         </Box>
 
