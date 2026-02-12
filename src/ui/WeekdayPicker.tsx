@@ -49,7 +49,7 @@ export function WeekdayPicker({ value, onChange }: WeekdayPickerProps) {
         return true;
       }
       // Try multiple ways to detect space/enter
-      if (key.name === "space" || key.name === "return" || key.sequence === " ") {
+      if (key.name === "space" || key.name === "return") {
         toggleDay();
         return true;
       }

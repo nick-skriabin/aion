@@ -24,7 +24,7 @@ function parseKeyString(keyStr: string): { name: string; shift: boolean; ctrl: b
   if (keyStr.length === 1 && keyStr >= "A" && keyStr <= "Z") {
     return { name: keyStr.toLowerCase(), shift: true, ctrl: false };
   }
-  
+
   const parts = keyStr.toLowerCase().split("+");
   const name = parts[parts.length - 1] ?? "";
   const shift = parts.includes("shift");
@@ -39,12 +39,12 @@ function normalizeKeyEvent(event: KeyEvent): { name: string; shift: boolean; ctr
   let name = event.name?.toLowerCase() || "";
   let shift = !!event.shift;
   const ctrl = !!event.ctrl;
-  
+
   // Check sequence for special characters
   if (event.sequence === "?") return { name: "?", shift: false, ctrl };
   if (event.sequence === ":") return { name: ":", shift: false, ctrl };
-  if (event.sequence === " ") return { name: "space", shift, ctrl };
-  
+  if (event.sequence === "space") return { name: "space", shift, ctrl };
+
   // Handle uppercase letters as shift + lowercase
   // When you press Shift+G, some terminals send name="G" without shift flag
   if (event.sequence && event.sequence.length === 1) {
@@ -54,11 +54,11 @@ function normalizeKeyEvent(event: KeyEvent): { name: string; shift: boolean; ctr
       shift = true;
     }
   }
-  
+
   // Map alternative names
   if (name === "enter") name = "return";
   if (name === "esc") name = "escape";
-  
+
   return { name, shift, ctrl };
 }
 
@@ -68,14 +68,14 @@ function normalizeKeyEvent(event: KeyEvent): { name: string; shift: boolean; ctr
 function matchesKey(event: KeyEvent, keyStr: string): boolean {
   const parsed = parseKeyString(keyStr);
   const normalized = normalizeKeyEvent(event);
-  
+
   // Match name
   const nameMatch = normalized.name === parsed.name;
-  
+
   // Match modifiers
   const shiftMatch = normalized.shift === parsed.shift;
   const ctrlMatch = normalized.ctrl === parsed.ctrl;
-  
+
   return nameMatch && shiftMatch && ctrlMatch;
 }
 
@@ -89,7 +89,7 @@ export function handleKeyEvent(
   handlers: ActionHandlers
 ): string | undefined {
   const keybinds = KEYBIND_REGISTRY[scope] || [];
-  
+
   for (const kb of keybinds) {
     if (matchesKey(event, kb.key)) {
       const handler = handlers[kb.action];
@@ -99,7 +99,7 @@ export function handleKeyEvent(
       }
     }
   }
-  
+
   return undefined;
 }
 
@@ -109,11 +109,11 @@ export function handleKeyEvent(
 export function getKeybindMap(scope: KeybindScope): Map<string, KeybindDef> {
   const keybinds = KEYBIND_REGISTRY[scope] || [];
   const map = new Map<string, KeybindDef>();
-  
+
   for (const kb of keybinds) {
     map.set(kb.key, kb);
   }
-  
+
   return map;
 }
 

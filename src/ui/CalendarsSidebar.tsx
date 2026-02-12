@@ -101,7 +101,7 @@ function CalendarsKeybinds({
       return;
     }
     
-    if (key.sequence === " " || key.name === "return") {
+    if (key.sequence === "space" || key.name === "return") {
       handlers.toggle();
       return;
     }
