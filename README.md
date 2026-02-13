@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nick-skriabin/aion/releases/latest"><img src="https://img.shields.io/github/v/release/nick-skriabin/aion?label=Release&color=green" alt="Latest Release"></a>
-  <a href="https://github.com/nick-skriabin/aion/releases/latest"><img src="https://img.shields.io/github/downloads/nick-skriabin/aion/total?label=Downloads&color=blue" alt="Downloads"></a>
+  <a href="https://github.com/semos-labs/aion/releases/latest"><img src="https://img.shields.io/github/v/release/semos-labs/aion?label=Release&color=green" alt="Latest Release"></a>
+  <a href="https://github.com/semos-labs/aion/releases/latest"><img src="https://img.shields.io/github/downloads/semos-labs/aion/total?label=Downloads&color=blue" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun&logoColor=black" alt="Bun">
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License">
 </p>
@@ -78,13 +78,13 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 ### Option 1: Homebrew (macOS/Linux)
 
 ```bash
-brew tap nick-skriabin/tap
+brew tap semos-labs/tap
 brew install aion
 ```
 
 ### Option 2: Download Binary
 
-Download the latest release for your platform from the [Releases](https://github.com/nick-skriabin/aion/releases) page:
+Download the latest release for your platform from the [Releases](https://github.com/semos-labs/aion/releases) page:
 
 | Platform | Binary |
 |----------|--------|
@@ -107,7 +107,7 @@ aion
 ### Option 3: Build from Source
 
 ```bash
-git clone https://github.com/nick-skriabin/aion.git
+git clone https://github.com/semos-labs/aion.git
 cd aion
 bun install
 
@@ -422,7 +422,7 @@ You can override XDG paths with environment variables:
 | Component | Technology |
 |-----------|------------|
 | **Runtime** | [Bun](https://bun.sh) |
-| **UI Framework** | [Glyph](https://github.com/nick-skriabin/glyph) (React for terminals) |
+| **UI Framework** | [Glyph](https://github.com/semos-labs/glyph) (React for terminals) |
 | **State Management** | [Jotai](https://jotai.org) |
 | **Database** | SQLite via [Drizzle ORM](https://orm.drizzle.team) |
 | **Date/Time** | [Luxon](https://moment.github.io/luxon) |

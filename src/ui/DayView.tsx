@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Box } from "@nick-skriabin/glyph";
+import { Box } from "@semos-labs/glyph";
 import { useAtomValue } from "jotai";
 import { CalendarsSidebar } from "./CalendarsSidebar.tsx";
 import { DaysSidebar } from "./DaysSidebar.tsx";

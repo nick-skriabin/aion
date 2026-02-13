@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Box, Text, Portal, ScrollView, Keybind, Input } from "@nick-skriabin/glyph";
+import { Box, Text, Portal, ScrollView, Keybind, Input } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { focusAtom, overlayStackAtom } from "../state/atoms.ts";
 import { popOverlayAtom } from "../state/actions.ts";

@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useCallback } from "react";
-import { Box, Text, FocusScope, useInput } from "@nick-skriabin/glyph";
+import { Box, Text, FocusScope, useInput } from "@semos-labs/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   calendarSidebarVisibleAtom,

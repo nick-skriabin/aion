@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Text, Portal, ScrollView } from "@nick-skriabin/glyph";
+import { Box, Text, Portal, ScrollView } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   pendingInvitesAtom,

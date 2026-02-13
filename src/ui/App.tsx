@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text, useApp, Keybind, JumpNav, DialogHost } from "@nick-skriabin/glyph";
+import { Box, Text, useApp, Keybind, JumpNav, DialogHost } from "@semos-labs/glyph";
 import { Loader } from "./Loader.tsx";
 import { Provider, useAtomValue, useSetAtom } from "jotai";
 import { DayView } from "./DayView.tsx";

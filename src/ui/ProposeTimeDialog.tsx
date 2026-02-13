@@ -9,7 +9,7 @@ import {
   useInput,
   useApp,
   createMask,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import {

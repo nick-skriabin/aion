@@ -3,7 +3,7 @@
  */
 
 import React from "react";
-import { Box, Text, Spinner } from "@nick-skriabin/glyph";
+import { Box, Text, Spinner } from "@semos-labs/glyph";
 import { theme } from "./theme.ts";
 
 // Braille dots spinner frames

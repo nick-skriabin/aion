@@ -15,7 +15,7 @@ import {
   type Style,
   type Color,
   JumpNav,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import {

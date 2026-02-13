@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Box, Text, useFocusable, type Color } from "@nick-skriabin/glyph";
+import { Box, Text, useFocusable, type Color } from "@semos-labs/glyph";
 import { theme } from "./theme.ts";
 import { type Weekday } from "../domain/recurrence.ts";
 

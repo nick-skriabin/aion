@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef } from "react";
-import { Box, Text, useInput, useApp, type Color } from "@nick-skriabin/glyph";
+import { Box, Text, useInput, useApp, type Color } from "@semos-labs/glyph";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import {

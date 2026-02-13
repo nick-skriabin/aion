@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo } from "react";
-import { Box, Text, useInput, useApp } from "@nick-skriabin/glyph";
+import { Box, Text, useInput, useApp } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   daysListAtom,

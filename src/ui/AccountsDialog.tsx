@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Box, Text, Input, Button, Portal, Keybind, useInput } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Button, Portal, Keybind, useInput } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { accountsAtom } from "../state/atoms.ts";
 import { popOverlayAtom, showMessageAtom, syncAtom } from "../state/actions.ts";

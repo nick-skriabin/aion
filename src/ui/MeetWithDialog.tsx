@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Box, Text, Input, Keybind, Portal } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Keybind, Portal } from "@semos-labs/glyph";
 import { Loader } from "./Loader.tsx";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { DateTime } from "luxon";

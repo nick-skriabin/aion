@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { Box, Text, useDialog } from "@nick-skriabin/glyph";
+import { Box, Text, useDialog } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   eventsAtom,

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from "react";
-import { Box, Text, Input, Keybind, Portal } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Keybind, Portal } from "@semos-labs/glyph";
 import { useSetAtom } from "jotai";
 import { DateTime } from "luxon";
 import { popOverlayAtom } from "../state/actions.ts";

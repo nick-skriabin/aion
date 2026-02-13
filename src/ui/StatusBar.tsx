@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Text, Input, Portal, FocusScope } from "@nick-skriabin/glyph";
+import { Box, Text, Input, Portal, FocusScope } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom, useAtom } from "jotai";
 import { DateTime } from "luxon";
 import {

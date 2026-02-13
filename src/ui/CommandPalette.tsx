@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Box, Text, ScrollView } from "@nick-skriabin/glyph";
+import { Box, Text, ScrollView } from "@semos-labs/glyph";
 import { useAtomValue, useAtom } from "jotai";
 import { commandInputAtom, commandSelectedIndexAtom } from "../state/atoms.ts";
 import { getAllCommands } from "../keybinds/registry.ts";

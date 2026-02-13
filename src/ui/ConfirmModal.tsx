@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Text, Button, Portal, FocusScope, Radio } from "@nick-skriabin/glyph";
+import { Box, Text, Button, Portal, FocusScope, Radio } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   pendingActionAtom,

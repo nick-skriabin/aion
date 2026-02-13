@@ -6,9 +6,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nick-skriabin/aion.git"
+    "url": "https://github.com/semos-labs/aion.git"
   },
-  "homepage": "https://github.com/nick-skriabin/aion",
+  "homepage": "https://github.com/semos-labs/aion",
   "keywords": [
     "calendar",
     "terminal",
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
-    "@nick-skriabin/glyph": "^0.1.50",
+    "@semos-labs/glyph": "^0.1.50",
     "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.38.3",
     "html-to-text": "^9.0.5",

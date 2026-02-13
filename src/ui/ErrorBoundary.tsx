@@ -1,6 +1,6 @@
 import React from "react";
 import { ErrorBoundary as ReactErrorBoundary, type FallbackProps } from "react-error-boundary";
-import { Box, Text } from "@nick-skriabin/glyph";
+import { Box, Text } from "@semos-labs/glyph";
 import { appLogger } from "../lib/logger.ts";
 
 function ErrorFallback({ error }: FallbackProps) {

@@ -1,5 +1,5 @@
 import React from "react";
-import { Keybind } from "@nick-skriabin/glyph";
+import { Keybind } from "@semos-labs/glyph";
 import { KEYBIND_REGISTRY, type KeybindScope, type KeybindDef } from "./registry.ts";
 
 type ActionHandlers = Record<string, (() => void) | undefined>;

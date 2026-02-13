@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Box, Text, Portal, ScrollView, FocusScope, Keybind, type Color } from "@nick-skriabin/glyph";
+import { Box, Text, Portal, ScrollView, FocusScope, Keybind, type Color } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import { convert } from "html-to-text";
 import { selectedEventAtom, timezoneAtom, focusAtom, calendarColorMapAtom, getCalendarColor, calendarsAtom } from "../state/atoms.ts";

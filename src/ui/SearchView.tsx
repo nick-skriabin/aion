@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from "react";
-import { Box, Text, type Color } from "@nick-skriabin/glyph";
+import { Box, Text, type Color } from "@semos-labs/glyph";
 import { useAtomValue } from "jotai";
 import { DateTime } from "luxon";
 import {

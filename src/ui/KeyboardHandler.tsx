@@ -1,5 +1,5 @@
 import React from "react";
-import { Keybind } from "@nick-skriabin/glyph";
+import { Keybind } from "@semos-labs/glyph";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   topOverlayAtom,

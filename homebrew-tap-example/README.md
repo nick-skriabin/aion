@@ -4,7 +4,7 @@ This directory contains example files for setting up your Homebrew tap repositor
 
 ## Setup
 
-1. **Create a new repository** named `homebrew-tap` (e.g., `nick-skriabin/homebrew-tap`)
+1. **Create a new repository** named `homebrew-tap` (e.g., `semos-labs/homebrew-tap`)
 
 2. **Copy these files** to your new repository:
    ```
@@ -37,7 +37,7 @@ When you push a tag like `v0.1.0` to the aion repository:
 ## Users can then install with:
 
 ```bash
-brew tap nick-skriabin/tap
+brew tap semos-labs/tap
 brew install aion
 ```
 
