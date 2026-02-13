@@ -8,8 +8,8 @@ permissions:
   contents: write
 
 env:
-  GITHUB_REPO: nick-skriabin/aion
-  HOMEBREW_TAP: nick-skriabin/homebrew-tap
+  GITHUB_REPO: semos-labs/aion
+  HOMEBREW_TAP: semos-labs/homebrew-tap
 
 jobs:
   build:
@@ -32,19 +32,19 @@ jobs:
             artifact: aion-darwin-arm64
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.4"
-      
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      
+
       - name: Build binary
         run: |
           bun build --compile --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }} \
@@ -54,10 +54,10 @@ jobs:
           # Fallback in case secrets aren't set
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || '' }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || '' }}
-      
+
       - name: Make executable
         run: chmod +x ${{ matrix.artifact }}
-      
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -69,7 +69,7 @@ jobs:
     name: Update Homebrew Tap
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Get version from release
         id: version
@@ -78,20 +78,20 @@ jobs:
           VERSION=${VERSION#v}  # Remove 'v' prefix
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
-      
+
       - name: Wait for release assets to be available
         run: |
           echo "Waiting for release assets..."
           sleep 30
-      
+
       - name: Download and calculate SHA256 checksums
         id: sha256
         run: |
           VERSION=${{ steps.version.outputs.version }}
           BASE_URL="https://github.com/${{ env.GITHUB_REPO }}/releases/download/v${VERSION}"
-          
+
           echo "Downloading binaries and calculating checksums..."
-          
+
           # Function to download and get SHA256 (debug output to stderr)
           get_sha256() {
             local url="$1"
@@ -105,20 +105,20 @@ jobs:
             echo "${name}: ${SHA}" >&2
             echo "$SHA"
           }
-          
+
           SHA_DARWIN_ARM64=$(get_sha256 "${BASE_URL}/aion-darwin-arm64" "darwin-arm64")
           SHA_DARWIN_X64=$(get_sha256 "${BASE_URL}/aion-darwin-x64" "darwin-x64")
           SHA_LINUX_ARM64=$(get_sha256 "${BASE_URL}/aion-linux-arm64" "linux-arm64")
           SHA_LINUX_X64=$(get_sha256 "${BASE_URL}/aion-linux-x64" "linux-x64")
-          
+
           echo "darwin_arm64=${SHA_DARWIN_ARM64}" >> $GITHUB_OUTPUT
           echo "darwin_x64=${SHA_DARWIN_X64}" >> $GITHUB_OUTPUT
           echo "linux_arm64=${SHA_LINUX_ARM64}" >> $GITHUB_OUTPUT
           echo "linux_x64=${SHA_LINUX_X64}" >> $GITHUB_OUTPUT
-          
+
           echo ""
           echo "All checksums calculated successfully!"
-      
+
       - name: Trigger Homebrew tap update
         uses: peter-evans/repository-dispatch@v3
         with:
@@ -134,7 +134,7 @@ jobs:
               "sha256_linux_arm64": "${{ steps.sha256.outputs.linux_arm64 }}",
               "sha256_linux_x64": "${{ steps.sha256.outputs.linux_x64 }}"
             }
-      
+
       - name: Summary
         run: |
           echo "## Homebrew Tap Update Triggered" >> $GITHUB_STEP_SUMMARY
