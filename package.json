@@ -31,11 +31,14 @@
     "build:darwin-arm64": "bun build --compile --target=bun-darwin-arm64 src/index.tsx --outfile dist/aion-darwin-arm64",
     "build:all": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:darwin-x64 && bun run build:darwin-arm64",
     "db:generate": "bunx drizzle-kit generate",
-    "db:migrate": "bun run src/db/migrate.ts"
+    "db:migrate": "bun run src/db/migrate.ts",
+    "release": "bun scripts/release.ts",
+    "release:minor": "bun scripts/release.ts --minor",
+    "release:major": "bun scripts/release.ts --major"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
-    "@semos-labs/glyph": "^0.1.80",
+    "@semos-labs/glyph": "^0.1.86",
     "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.38.3",
     "html-to-text": "^9.0.5",
