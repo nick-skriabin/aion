@@ -12,9 +12,9 @@ import { $ } from "bun";
 
 // Parse arguments
 const args = process.argv.slice(2);
-const bumpType = args.includes("--major") ? "major" 
-              : args.includes("--minor") ? "minor" 
-              : "patch";
+const bumpType = args.includes("--major") ? "major"
+  : args.includes("--minor") ? "minor"
+    : "patch";
 
 async function main() {
   console.log("🚀 Starting release process...\n");
@@ -22,7 +22,7 @@ async function main() {
   // 1. Check if work tree is clean
   console.log("📋 Checking work tree...");
   const status = await $`git status --porcelain`.text();
-  
+
   if (status.trim() !== "") {
     console.error("❌ Work tree is not clean. Please commit or stash your changes first.");
     console.error("\nUncommitted changes:");
@@ -51,7 +51,7 @@ async function main() {
   }
 
   let [, major, minor, patch] = versionMatch.map(Number);
-  
+
   switch (bumpType) {
     case "major":
       major!++;
@@ -75,8 +75,7 @@ async function main() {
   const versionStr = `${major}.${minor}.${patch}`;
 
   const packagePaths = [
-    "./packages/glyph/package.json",
-    "./packages/create-glyph/package.json",
+    "./package.json",
   ];
 
   for (const pkgPath of packagePaths) {
