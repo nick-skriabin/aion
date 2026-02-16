@@ -17,15 +17,25 @@ export interface TokenData {
   expires_at?: number;
 }
 
+export type AccountType = "google" | "caldav";
+
 export interface AccountInfo {
   email: string;
   name?: string;
   picture?: string;
+  type: AccountType; // "google" or "caldav"
+}
+
+export interface CalDAVCredentials {
+  serverUrl: string;
+  username: string;
+  password: string; // app-specific password
 }
 
 export interface AccountData {
   account: AccountInfo;
-  tokens: TokenData;
+  tokens?: TokenData; // Google OAuth tokens
+  caldavCredentials?: CalDAVCredentials; // CalDAV server credentials
 }
 
 export interface AccountsStore {
@@ -46,7 +56,15 @@ export async function loadAccountsStore(): Promise<AccountsStore> {
     const file = Bun.file(ACCOUNTS_FILE);
     if (await file.exists()) {
       const content = await file.text();
-      return JSON.parse(content) as AccountsStore;
+      const store = JSON.parse(content) as AccountsStore;
+      // Migrate: ensure all accounts have a type (default to "google" for backward compat)
+      for (const key of Object.keys(store.accounts)) {
+        const acct = store.accounts[key];
+        if (acct && !acct.account.type) {
+          acct.account.type = "google";
+        }
+      }
+      return store;
     }
   } catch {
     // File doesn't exist or is invalid
@@ -123,7 +141,7 @@ export async function setDefaultAccount(email: string): Promise<void> {
 }
 
 /**
- * Save account tokens
+ * Save account tokens (Google OAuth)
  */
 export async function saveAccountTokens(account: AccountInfo, tokens: TokenData): Promise<void> {
   const store = await loadAccountsStore();
@@ -135,8 +153,30 @@ export async function saveAccountTokens(account: AccountInfo, tokens: TokenData)
   };
   
   store.accounts[account.email] = {
-    account,
+    account: { ...account, type: account.type || "google" },
     tokens: tokensWithExpiry,
+  };
+  
+  // Set as default if it's the first account
+  if (!store.defaultAccount || Object.keys(store.accounts).length === 1) {
+    store.defaultAccount = account.email;
+  }
+  
+  await saveAccountsStore(store);
+}
+
+/**
+ * Save CalDAV account credentials
+ */
+export async function saveCalDAVAccount(
+  account: AccountInfo,
+  credentials: CalDAVCredentials
+): Promise<void> {
+  const store = await loadAccountsStore();
+  
+  store.accounts[account.email] = {
+    account: { ...account, type: "caldav" },
+    caldavCredentials: credentials,
   };
   
   // Set as default if it's the first account
@@ -152,6 +192,14 @@ export async function saveAccountTokens(account: AccountInfo, tokens: TokenData)
  */
 export async function removeAccount(email: string): Promise<void> {
   const store = await loadAccountsStore();
+  
+  // Clear CalDAV client cache if this was a CalDAV account
+  const account = store.accounts[email];
+  if (account?.account.type === "caldav") {
+    const { clearCalDAVClient } = await import("../api/caldav.ts");
+    clearCalDAVClient(email);
+  }
+  
   delete store.accounts[email];
   
   // Clear default if it was this account
@@ -228,11 +276,17 @@ async function refreshAccountToken(email: string, refreshToken: string): Promise
 
 /**
  * Get a valid access token for an account, refreshing if necessary
+ * Returns null for CalDAV accounts (they use credentials, not tokens)
  */
 export async function getValidAccessTokenForAccount(email: string): Promise<string | null> {
   const account = await getAccount(email);
   
   if (!account) {
+    return null;
+  }
+  
+  // CalDAV accounts don't use OAuth tokens
+  if (account.account.type === "caldav" || !account.tokens) {
     return null;
   }
   

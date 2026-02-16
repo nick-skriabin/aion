@@ -33,6 +33,7 @@ export const KEYBIND_REGISTRY: Record<KeybindScope, KeybindDef[]> = {
     { key: "", display: "", description: "Sync events with Google Calendar", action: "sync", command: "sync" },
     { key: "", display: "", description: "List connected accounts", action: "accounts", command: "accounts" },
     { key: "", display: "", description: "Upgrade permissions (grant new scopes)", action: "upgrade", command: "upgrade" },
+    { key: "", display: "", description: "Add CalDAV account (iCloud, Fastmail, Nextcloud...)", action: "caldavLogin", command: "caldav" },
   ],
 
   calendars: [

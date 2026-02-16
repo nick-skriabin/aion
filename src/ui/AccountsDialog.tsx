@@ -23,6 +23,7 @@ import {
   setDefaultAccount,
   removeAccount,
   getAccounts,
+  getAccount,
 } from "../auth/index.ts";
 
 const DIALOG_WIDTH = 65;
@@ -37,6 +38,7 @@ export function AccountsDialog() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [defaultEmail, setDefaultEmail] = useState<string | null>(null);
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
+  const [accountTypes, setAccountTypes] = useState<Record<string, string>>({});
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -54,9 +56,17 @@ export function AccountsDialog() {
 
       const def = await getDefaultAccount();
       setDefaultEmail(def?.account.email || null);
+
+      // Load account types
+      const types: Record<string, string> = {};
+      for (const acct of accounts) {
+        const data = await getAccount(acct.email);
+        types[acct.email] = data?.account.type || "google";
+      }
+      setAccountTypes(types);
     }
     load();
-  }, []);
+  }, [accounts]);
 
   const selectedAccount = accounts[selectedIndex];
 
@@ -275,6 +285,18 @@ export function AccountsDialog() {
             <Box style={{ flexDirection: "column", paddingLeft: 1, flexGrow: 1, clip: true }}>
               {selectedAccount && (
                 <>
+                  {/* Type badge */}
+                  <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+                    <Text style={{ color: theme.text.dim, width: 6 }}>type</Text>
+                    <Text style={{
+                      color: accountTypes[selectedAccount.email] === "caldav"
+                        ? theme.accent.warning
+                        : theme.accent.success,
+                    }}>
+                      {accountTypes[selectedAccount.email] === "caldav" ? "CalDAV" : "Google"}
+                    </Text>
+                  </Box>
+
                   {/* Email */}
                   <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
                     <Text style={{ color: theme.text.dim, width: 6 }}>email</Text>

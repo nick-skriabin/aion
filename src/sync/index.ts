@@ -10,6 +10,7 @@ export {
   getLastFullSync,
   setLastFullSync,
   getSyncTokenKey,
+  parseSyncTokenKey,
 } from "./syncTokens.ts";
 
 export {

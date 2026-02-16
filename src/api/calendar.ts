@@ -1,5 +1,6 @@
 /**
  * Google Calendar API client (multi-account support)
+ * Also routes CalDAV accounts to the CalDAV provider.
  */
 
 import { getValidAccessToken, getValidAccessTokenForAccount, getAccounts } from "../auth/tokens.ts";
@@ -7,6 +8,15 @@ import type { GCalEvent, Attendee, Organizer } from "../domain/gcalEvent.ts";
 import { apiLogger } from "../lib/logger.ts";
 import { makeCompositeId, extractGoogleId } from "../db/eventsRepo.ts";
 import { prefetchContactNames, getDisplayName } from "./contacts.ts";
+import {
+  getCalDAVCalendars,
+  fetchCalDAVEvents,
+  createCalDAVEvent,
+  updateCalDAVEvent,
+  deleteCalDAVEvent,
+  syncCalDAVCalendar,
+} from "./caldav.ts";
+import { getSyncTokenKey } from "../sync/syncTokens.ts";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
@@ -89,7 +99,7 @@ export async function getCalendarListForAccount(accountEmail: string): Promise<C
 }
 
 /**
- * Get list of all calendars across all accounts
+ * Get list of all calendars across all accounts (Google + CalDAV)
  */
 export async function getAllCalendars(): Promise<CalendarListEntry[]> {
   const accounts = await getAccounts();
@@ -98,10 +108,22 @@ export async function getAllCalendars(): Promise<CalendarListEntry[]> {
   
   for (const account of accounts) {
     try {
-      apiLogger.debug(`Fetching calendars for ${account.account.email}`);
-      const calendars = await getCalendarListForAccount(account.account.email);
-      apiLogger.debug(`Got ${calendars.length} calendars for ${account.account.email}`);
-      allCalendars.push(...calendars);
+      apiLogger.debug(`Fetching calendars for ${account.account.email} (${account.account.type || "google"})`);
+      
+      if (account.account.type === "caldav" && account.caldavCredentials) {
+        // CalDAV account
+        const calendars = await getCalDAVCalendars(
+          account.account.email,
+          account.caldavCredentials
+        );
+        apiLogger.debug(`Got ${calendars.length} CalDAV calendars for ${account.account.email}`);
+        allCalendars.push(...calendars);
+      } else {
+        // Google account (default)
+        const calendars = await getCalendarListForAccount(account.account.email);
+        apiLogger.debug(`Got ${calendars.length} calendars for ${account.account.email}`);
+        allCalendars.push(...calendars);
+      }
     } catch (error) {
       apiLogger.error(`Failed to fetch calendars for ${account.account.email}`, error);
     }
@@ -399,6 +421,7 @@ export interface FullSyncResult {
 /**
  * Fetch events from all accounts and calendars (full sync)
  * Returns sync tokens for future incremental syncs
+ * Supports both Google Calendar and CalDAV accounts.
  */
 export async function fetchAllEvents(options: {
   timeMin: string;
@@ -411,30 +434,57 @@ export async function fetchAllEvents(options: {
   
   for (const account of accounts) {
     try {
-      // Get all calendars for this account
-      const calendars = await getCalendarListForAccount(account.account.email);
-      
-      // Fetch events from each calendar
-      for (const calendar of calendars) {
-        try {
-          const { events, syncToken } = await fetchEvents({
-            calendarId: calendar.id,
-            timeMin: options.timeMin,
-            timeMax: options.timeMax,
-            maxResults: options.maxResults,
-            accountEmail: account.account.email,
-          });
-          allEvents.push(...events);
-          
-          // Store sync token for this calendar
-          if (syncToken) {
-            const key = `${account.account.email}:${calendar.id}`;
-            syncTokens.set(key, syncToken);
+      if (account.account.type === "caldav" && account.caldavCredentials) {
+        // CalDAV account - fetch events from all CalDAV calendars
+        const calendars = await getCalDAVCalendars(
+          account.account.email,
+          account.caldavCredentials
+        );
+        
+        for (const calendar of calendars) {
+          try {
+            const { events, ctag } = await fetchCalDAVEvents({
+              calendarId: calendar.id,
+              timeMin: options.timeMin,
+              timeMax: options.timeMax,
+              accountEmail: account.account.email,
+              credentials: account.caldavCredentials,
+            });
+            allEvents.push(...events);
+            
+            // Store ctag as sync token for CalDAV calendars
+            if (ctag) {
+              syncTokens.set(getSyncTokenKey(account.account.email, calendar.id), ctag);
+            }
+            
+            apiLogger.debug(`CalDAV: Fetched ${events.length} events from ${calendar.summary}`);
+          } catch (error) {
+            apiLogger.error(`CalDAV: Failed to fetch events for calendar ${calendar.summary}`, error);
           }
-          
-          apiLogger.debug(`Fetched ${events.length} events from ${calendar.summary}`);
-        } catch (error) {
-          apiLogger.error(`Failed to fetch events for calendar ${calendar.summary}`, error);
+        }
+      } else {
+        // Google account (default)
+        const calendars = await getCalendarListForAccount(account.account.email);
+        
+        for (const calendar of calendars) {
+          try {
+            const { events, syncToken } = await fetchEvents({
+              calendarId: calendar.id,
+              timeMin: options.timeMin,
+              timeMax: options.timeMax,
+              maxResults: options.maxResults,
+              accountEmail: account.account.email,
+            });
+            allEvents.push(...events);
+            
+            if (syncToken) {
+              syncTokens.set(getSyncTokenKey(account.account.email, calendar.id), syncToken);
+            }
+            
+            apiLogger.debug(`Fetched ${events.length} events from ${calendar.summary}`);
+          } catch (error) {
+            apiLogger.error(`Failed to fetch events for calendar ${calendar.summary}`, error);
+          }
         }
       }
     } catch (error) {
@@ -442,8 +492,14 @@ export async function fetchAllEvents(options: {
     }
   }
   
-  // Enrich events with display names from contacts
-  await enrichEventsWithDisplayNames(allEvents);
+  // Enrich events with display names from contacts (Google accounts only)
+  const googleEvents = allEvents.filter(e => {
+    const acct = accounts.find(a => a.account.email === e.accountEmail);
+    return !acct || acct.account.type !== "caldav";
+  });
+  if (googleEvents.length > 0) {
+    await enrichEventsWithDisplayNames(googleEvents);
+  }
   
   return { events: allEvents, syncTokens };
 }
@@ -519,10 +575,12 @@ export interface AllCalendarsIncrementalResult {
 }
 
 /**
- * Perform incremental sync on all calendars using stored sync tokens
+ * Perform incremental sync on all calendars using stored sync tokens.
+ * Supports both Google Calendar (sync tokens) and CalDAV (ctags).
  */
 export async function incrementalSyncAll(
-  getSyncTokenFn: (accountEmail: string, calendarId: string) => Promise<string | undefined>
+  getSyncTokenFn: (accountEmail: string, calendarId: string) => Promise<string | undefined>,
+  syncTimeRange?: { timeMin: string; timeMax: string }
 ): Promise<AllCalendarsIncrementalResult> {
   const accounts = await getAccounts();
   const changed: GCalEvent[] = [];
@@ -532,41 +590,87 @@ export async function incrementalSyncAll(
   
   for (const account of accounts) {
     try {
-      const calendars = await getCalendarListForAccount(account.account.email);
-      
-      for (const calendar of calendars) {
-        const calendarKey = `${account.account.email}:${calendar.id}`;
-        const existingToken = await getSyncTokenFn(account.account.email, calendar.id);
+      if (account.account.type === "caldav" && account.caldavCredentials) {
+        // CalDAV account - use ctag-based sync
+        // CalDAV handles its own "full refetch" inline when ctag changes,
+        // so we DON'T add to calendarsRequiringFullSync (that would trigger
+        // a global full sync of ALL accounts including Google).
+        const calendars = await getCalDAVCalendars(
+          account.account.email,
+          account.caldavCredentials
+        );
         
-        if (!existingToken) {
-          // No token - calendar needs full sync
-          calendarsRequiringFullSync.push(calendarKey);
-          continue;
-        }
-        
-        try {
-          const result = await incrementalSync({
-            calendarId: calendar.id,
-            syncToken: existingToken,
-            accountEmail: account.account.email,
-          });
+        for (const calendar of calendars) {
+          const calendarKey = getSyncTokenKey(account.account.email, calendar.id);
+          const storedCtag = await getSyncTokenFn(account.account.email, calendar.id);
           
-          if (result.fullSyncRequired) {
+          if (!syncTimeRange) {
+            // No time range available - can't sync CalDAV without one
+            continue;
+          }
+          
+          try {
+            const result = await syncCalDAVCalendar({
+              calendarId: calendar.id,
+              accountEmail: account.account.email,
+              credentials: account.caldavCredentials,
+              storedCtag, // undefined on first sync is fine
+              timeMin: syncTimeRange.timeMin,
+              timeMax: syncTimeRange.timeMax,
+            });
+            
+            // CalDAV "sync" refetches all events when ctag changes.
+            // Treat the results as changed events for the caller to upsert.
+            if (result.events.length > 0) {
+              changed.push(...result.events);
+            }
+            
+            if (result.nextSyncToken) {
+              syncTokens.set(calendarKey, result.nextSyncToken);
+            }
+            
+            apiLogger.debug(`CalDAV sync for ${calendar.summary}: ${result.events.length} events`);
+          } catch (error) {
+            apiLogger.error(`CalDAV sync failed for ${calendar.summary}`, error);
+          }
+        }
+      } else {
+        // Google account (default)
+        const calendars = await getCalendarListForAccount(account.account.email);
+        
+        for (const calendar of calendars) {
+          const calendarKey = getSyncTokenKey(account.account.email, calendar.id);
+          const existingToken = await getSyncTokenFn(account.account.email, calendar.id);
+          
+          if (!existingToken) {
             calendarsRequiringFullSync.push(calendarKey);
             continue;
           }
           
-          changed.push(...result.events);
-          deleted.push(...result.deleted);
-          
-          if (result.nextSyncToken) {
-            syncTokens.set(calendarKey, result.nextSyncToken);
+          try {
+            const result = await incrementalSync({
+              calendarId: calendar.id,
+              syncToken: existingToken,
+              accountEmail: account.account.email,
+            });
+            
+            if (result.fullSyncRequired) {
+              calendarsRequiringFullSync.push(calendarKey);
+              continue;
+            }
+            
+            changed.push(...result.events);
+            deleted.push(...result.deleted);
+            
+            if (result.nextSyncToken) {
+              syncTokens.set(calendarKey, result.nextSyncToken);
+            }
+            
+            apiLogger.debug(`Incremental sync for ${calendar.summary}: ${result.events.length} changed, ${result.deleted.length} deleted`);
+          } catch (error) {
+            apiLogger.error(`Incremental sync failed for ${calendar.summary}`, error);
+            calendarsRequiringFullSync.push(calendarKey);
           }
-          
-          apiLogger.debug(`Incremental sync for ${calendar.summary}: ${result.events.length} changed, ${result.deleted.length} deleted`);
-        } catch (error) {
-          apiLogger.error(`Incremental sync failed for ${calendar.summary}`, error);
-          calendarsRequiringFullSync.push(calendarKey);
         }
       }
     } catch (error) {
@@ -574,9 +678,13 @@ export async function incrementalSyncAll(
     }
   }
   
-  // Enrich changed events with display names
-  if (changed.length > 0) {
-    await enrichEventsWithDisplayNames(changed);
+  // Enrich changed events with display names (Google events only)
+  const googleChanged = changed.filter(e => {
+    const acct = accounts.find(a => a.account.email === e.accountEmail);
+    return !acct || acct.account.type !== "caldav";
+  });
+  if (googleChanged.length > 0) {
+    await enrichEventsWithDisplayNames(googleChanged);
   }
   
   return { changed, deleted, syncTokens, calendarsRequiringFullSync };
@@ -584,7 +692,8 @@ export async function incrementalSyncAll(
 
 /**
  * Create a new event
- * @param addGoogleMeet - If true, automatically creates a Google Meet link for the event
+ * Routes to CalDAV or Google Calendar based on account type.
+ * @param addGoogleMeet - If true, automatically creates a Google Meet link for the event (Google only)
  */
 export async function createEvent(
   event: Partial<GCalEvent>,
@@ -592,7 +701,16 @@ export async function createEvent(
   accountEmail?: string,
   addGoogleMeet = false
 ): Promise<GCalEvent> {
-  // Build the event body
+  // Check if this is a CalDAV account
+  if (accountEmail) {
+    const { getAccount } = await import("../auth/tokens.ts");
+    const account = await getAccount(accountEmail);
+    if (account?.account.type === "caldav" && account.caldavCredentials) {
+      return createCalDAVEvent(event, calendarId, accountEmail, account.caldavCredentials);
+    }
+  }
+
+  // Google Calendar path
   let eventBody: any = { ...event };
   
   // Add Google Meet if requested
@@ -629,13 +747,7 @@ export type RecurrenceScope = "this" | "following" | "all";
 
 /**
  * Update an existing event
- * @param eventId - The composite ID (accountEmail:calendarId:googleId) or just googleId for local events
- * @param event - The event data to update
- * @param calendarId - Calendar ID
- * @param accountEmail - Account email for multi-account support
- * @param scope - For recurring events: "this" (just this instance), "all" (all instances), "following" (this and future)
- * @param originalEvent - The original event (needed for "following" scope to get recurringEventId)
- * @param addGoogleMeet - If true, creates a Google Meet link (if not already present)
+ * Routes to CalDAV or Google Calendar based on account type.
  */
 export async function updateEvent(
   eventId: string,
@@ -646,21 +758,24 @@ export async function updateEvent(
   originalEvent?: GCalEvent,
   addGoogleMeet = false
 ): Promise<GCalEvent> {
-  // Extract the Google ID from composite ID for API call
+  // Check if this is a CalDAV account
+  if (accountEmail) {
+    const { getAccount } = await import("../auth/tokens.ts");
+    const account = await getAccount(accountEmail);
+    if (account?.account.type === "caldav" && account.caldavCredentials) {
+      return updateCalDAVEvent(eventId, event, calendarId, accountEmail, account.caldavCredentials);
+    }
+  }
+
+  // Google Calendar path
   let googleId = extractGoogleId(eventId);
   
-  // Handle recurring event scope
   if (scope === "all" && originalEvent?.recurringEventId) {
-    // Update the master recurring event (affects all instances)
     googleId = originalEvent.recurringEventId;
   }
-  // For "this" scope, we just update the specific instance (default behavior)
-  // For "following" scope, Google doesn't have a direct API - would need to create exception rules
   
-  // Build the event body
   let eventBody: any = { ...event };
   
-  // Add Google Meet if requested and not already present
   if (addGoogleMeet && !originalEvent?.hangoutLink) {
     eventBody.conferenceData = {
       createRequest: {
@@ -672,7 +787,6 @@ export async function updateEvent(
     };
   }
   
-  // Add conferenceDataVersion param if we're modifying conference data
   const params = addGoogleMeet ? "?conferenceDataVersion=1" : "";
   
   const response = await calendarFetch<GoogleCalendarEvent>(
@@ -689,12 +803,7 @@ export async function updateEvent(
 
 /**
  * Delete an event
- * @param eventId - The composite ID (accountEmail:googleId) or just googleId for local events
- * @param calendarId - Calendar ID
- * @param sendNotifications - Whether to notify attendees
- * @param accountEmail - Account email for multi-account support
- * @param scope - For recurring events: "this", "following", or "all"
- * @param recurringEventId - The master recurring event ID (for "all" scope)
+ * Routes to CalDAV or Google Calendar based on account type.
  */
 export async function deleteEvent(
   eventId: string,
@@ -704,13 +813,21 @@ export async function deleteEvent(
   scope?: "this" | "following" | "all",
   recurringEventId?: string
 ): Promise<void> {
-  // For "all" recurring events, delete the master event
+  // Check if this is a CalDAV account
+  if (accountEmail) {
+    const { getAccount } = await import("../auth/tokens.ts");
+    const account = await getAccount(accountEmail);
+    if (account?.account.type === "caldav" && account.caldavCredentials) {
+      return deleteCalDAVEvent(eventId, calendarId, accountEmail, account.caldavCredentials);
+    }
+  }
+
+  // Google Calendar path
   let targetId = eventId;
   if (scope === "all" && recurringEventId) {
     targetId = recurringEventId;
   }
   
-  // Extract the Google ID from composite ID for API call
   const googleId = extractGoogleId(targetId);
   
   const params = new URLSearchParams({
@@ -726,7 +843,7 @@ export async function deleteEvent(
 
 /**
  * Update attendance (RSVP) for an event
- * @param eventId - The composite ID (accountEmail:googleId) or just googleId for local events
+ * Note: CalDAV RSVP is handled via the same update mechanism
  */
 export async function updateAttendance(
   eventId: string,
@@ -734,7 +851,18 @@ export async function updateAttendance(
   calendarId = "primary",
   accountEmail?: string
 ): Promise<GCalEvent> {
-  // Extract the Google ID from composite ID for API call
+  // For CalDAV accounts, update attendance via event update
+  if (accountEmail) {
+    const { getAccount } = await import("../auth/tokens.ts");
+    const account = await getAccount(accountEmail);
+    if (account?.account.type === "caldav") {
+      // For CalDAV, we'd need to update the PARTSTAT in the VEVENT
+      // For now, just update locally (CalDAV RSVP is more complex)
+      throw new Error("RSVP via CalDAV is not yet supported");
+    }
+  }
+
+  // Google Calendar path
   const googleId = extractGoogleId(eventId);
   
   // To update attendance, we need to get the event first, find ourselves in attendees,

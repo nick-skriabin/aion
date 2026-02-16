@@ -993,6 +993,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
     case "openSearch":
       set(openSearchAtom);
       break;
+    case "caldavLogin":
+      set(openCalDAVLoginAtom);
+      break;
     default:
       // Unknown action
       break;
@@ -1247,7 +1250,7 @@ export const logoutAtom = atom(null, async (get, set, email?: string) => {
 export const syncAtom = atom(null, async (get, set, options?: { force?: boolean; silent?: boolean }) => {
   const { isLoggedIn, getAccounts } = await import("../auth/index.ts");
   const { isAuthLoadingAtom, accountsAtom, isSyncingAtom } = await import("./atoms.ts");
-  const { getSyncToken, setSyncToken, clearAllSyncTokens } = await import("../sync/syncTokens.ts");
+  const { getSyncToken, setSyncToken, clearAllSyncTokens, parseSyncTokenKey } = await import("../sync/syncTokens.ts");
   const { incrementalSyncAll, fetchAllEvents } = await import("../api/calendar.ts");
   const { appLogger } = await import("../lib/logger.ts");
   
@@ -1309,10 +1312,17 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
       await clearAllSyncTokens();
     }
     
+    // Calculate time range for CalDAV sync
+    const syncNow = DateTime.now();
+    const syncTimeRange = {
+      timeMin: syncNow.minus({ months: 1 }).startOf("day").toISO()!,
+      timeMax: syncNow.plus({ months: 1 }).endOf("day").toISO()!,
+    };
+
     // Try incremental sync first
     if (!options?.force) {
       appLogger.debug("Attempting incremental sync...");
-      const incrementalResult = await incrementalSyncAll(getSyncToken);
+      const incrementalResult = await incrementalSyncAll(getSyncToken, syncTimeRange);
       appLogger.debug("Incremental sync result", {
         changed: incrementalResult.changed.length,
         deleted: incrementalResult.deleted.length,
@@ -1351,9 +1361,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
           
           // Save new sync tokens
           for (const [key, token] of incrementalResult.syncTokens) {
-            const [accountEmail, calendarId] = key.split(":");
-            if (accountEmail && calendarId) {
-              await setSyncToken(accountEmail, calendarId, token);
+            const parsed = parseSyncTokenKey(key);
+            if (parsed) {
+              await setSyncToken(parsed.accountEmail, parsed.calendarId, token);
             }
           }
           
@@ -1379,9 +1389,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
           appLogger.debug("Incremental sync: no changes");
           // Still update sync tokens
           for (const [key, token] of incrementalResult.syncTokens) {
-            const [accountEmail, calendarId] = key.split(":");
-            if (accountEmail && calendarId) {
-              await setSyncToken(accountEmail, calendarId, token);
+            const parsed = parseSyncTokenKey(key);
+            if (parsed) {
+              await setSyncToken(parsed.accountEmail, parsed.calendarId, token);
             }
           }
         }
@@ -1467,9 +1477,9 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     
     // Save sync tokens for incremental sync
     for (const [key, token] of syncTokens) {
-      const [accountEmail, calendarId] = key.split(":");
-      if (accountEmail && calendarId) {
-        await setSyncToken(accountEmail, calendarId, token);
+      const parsed = parseSyncTokenKey(key);
+      if (parsed) {
+        await setSyncToken(parsed.accountEmail, parsed.calendarId, token);
       }
     }
     
@@ -1619,6 +1629,93 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
 export const showAccountsAtom = atom(null, async (get, set) => {
   set(pushOverlayAtom, { kind: "accounts" });
 });
+
+// ===== CalDAV Actions =====
+
+// Open CalDAV login dialog
+export const openCalDAVLoginAtom = atom(null, (get, set) => {
+  set(pushOverlayAtom, { kind: "caldavLogin" });
+});
+
+// Add a CalDAV account
+export const addCalDAVAccountAtom = atom(
+  null,
+  async (get, set, options: { serverUrl: string; username: string; password: string }) => {
+    const { saveCalDAVAccount, getAccounts } = await import("../auth/index.ts");
+    const { testCalDAVConnection } = await import("../api/caldav.ts");
+    const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
+    const { startBackgroundSync, isBackgroundSyncRunning } = await import("../sync/backgroundSync.ts");
+    
+    set(showMessageAtom, { text: "Connecting to CalDAV server...", type: "progress" });
+    
+    const credentials = {
+      serverUrl: options.serverUrl,
+      username: options.username,
+      password: options.password,
+    };
+    
+    // Test the connection first
+    const testResult = await testCalDAVConnection(credentials);
+    
+    if (!testResult.success) {
+      set(showMessageAtom, { text: `Connection failed: ${testResult.error}`, type: "error" });
+      return false;
+    }
+    
+    // Save the account
+    const accountInfo = {
+      email: options.username.includes("@") ? options.username : `${options.username}@caldav`,
+      name: options.username,
+      type: "caldav" as const,
+    };
+    
+    await saveCalDAVAccount(accountInfo, credentials);
+    
+    // Refresh accounts list
+    const accounts = await getAccounts();
+    set(accountsAtom, accounts.map((a) => ({
+      email: a.account.email,
+      name: a.account.name,
+      picture: a.account.picture,
+    })));
+    set(isLoggedInAtom, accounts.length > 0);
+    
+    // Fetch calendars
+    try {
+      const { getAllCalendars } = await import("../api/calendar.ts");
+      const { saveCalendarCache } = await import("../config/calendarCache.ts");
+      const calendars = await getAllCalendars();
+      
+      const calendarData = calendars.map((cal) => ({
+        id: cal.id,
+        summary: cal.summary,
+        primary: cal.primary,
+        accountEmail: cal.accountEmail || "",
+        backgroundColor: cal.backgroundColor,
+        foregroundColor: cal.foregroundColor,
+      }));
+      
+      set(calendarsAtom, calendarData);
+      await saveCalendarCache(calendarData);
+    } catch (error) {
+      appLogger.error("CalDAV: Failed to fetch calendars after login", { error });
+    }
+    
+    set(showMessageAtom, { text: `CalDAV account added: ${accountInfo.email}`, type: "success" });
+    
+    // Trigger sync
+    await set(syncAtom, { force: true });
+    
+    // Start background sync if not already running
+    if (!isBackgroundSyncRunning()) {
+      startBackgroundSync(async () => {
+        await set(backgroundSyncAtom);
+      });
+    }
+    
+    return true;
+  }
+);
 
 // ===== Search Actions =====
 

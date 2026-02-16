@@ -15,10 +15,36 @@ interface SyncTokenStore {
 let cache: SyncTokenStore | null = null;
 
 /**
+ * Separator used in sync token keys. Must not appear in email addresses or calendar IDs.
+ * Using tab character since CalDAV calendar IDs are URLs (contain colons).
+ */
+const SYNC_KEY_SEP = "\t";
+
+/**
  * Get the sync token key for a calendar
  */
 export function getSyncTokenKey(accountEmail: string, calendarId: string): string {
-  return `${accountEmail}:${calendarId}`;
+  return `${accountEmail}${SYNC_KEY_SEP}${calendarId}`;
+}
+
+/**
+ * Parse a sync token key back into accountEmail and calendarId
+ */
+export function parseSyncTokenKey(key: string): { accountEmail: string; calendarId: string } | null {
+  const sepIdx = key.indexOf(SYNC_KEY_SEP);
+  if (sepIdx === -1) {
+    // Legacy key format (colon-separated) - only works for Google calendar IDs
+    const colonIdx = key.indexOf(":");
+    if (colonIdx === -1) return null;
+    return {
+      accountEmail: key.substring(0, colonIdx),
+      calendarId: key.substring(colonIdx + 1),
+    };
+  }
+  return {
+    accountEmail: key.substring(0, sepIdx),
+    calendarId: key.substring(sepIdx + 1),
+  };
 }
 
 /**
