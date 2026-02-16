@@ -50,6 +50,30 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 
 **Vim-style navigation. Terminal-native. Zero distractions.**
 
+### Comparison
+
+| Feature | Aion | [calcurse](https://calcurse.org/) | [khal](https://github.com/pimutils/khal) | [gcalcli](https://github.com/insanum/gcalcli) | [calcure](https://github.com/anufrievroman/calcure) |
+|---------|:----:|:--------:|:----:|:-------:|:-------:|
+| **TUI (visual interface)** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Google Calendar sync** | ✅ Native | ❌ | 🔧 vdirsyncer | ✅ Native | ❌ |
+| **Multi-account** | ✅ | ❌ | 🔧 | ✅ | ❌ |
+| **Vim keybindings** | ✅ | Partial | ❌ | ❌ | Partial |
+| **Multi-day view** | ✅ 1/3/5 cols | ❌ | ❌ | ❌ | ❌ |
+| **Free/busy scheduling** | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Google Meet generation** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Natural language input** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Event search** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Recurring events** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Timezone support** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Theming** | ✅ TOML | ✅ | ✅ | ❌ | ✅ |
+| **Offline mode** | ✅ SQLite | ✅ | ✅ | ❌ | ✅ |
+| **Binary size** | ~60MB | ~1MB | ~5MB | ~10MB | ~5MB |
+| **Dependencies** | None | ncurses | Python | Python | Python |
+
+> 🔧 = Requires additional setup/tools
+
+**TL;DR**: Aion is the only terminal calendar with native Google Calendar sync, multi-account support, Meet link generation, free/busy scheduling, and a proper visual TUI — all in one package.
+
 ### Features
 
 | Feature | Description |
