@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Terminal calendar client with vim-style keybindings</strong><br>
-  <em>Beautiful. Fast. Keyboard-driven.</em>
+  <em>Google Calendar &amp; CalDAV. Beautiful. Fast. Keyboard-driven.</em>
 </p>
 
 ![Aion App](./images/app.jpg)
@@ -37,6 +37,8 @@
   - [General](#general)
 - [Commands](#commands)
 - [Configuration](#configuration)
+  - [Google Calendar](#google-calendar)
+  - [CalDAV](#caldav)
   - [Theme](#theme)
 - [Data Storage](#data-storage)
 - [Tech Stack](#tech-stack)
@@ -56,6 +58,7 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 |---------|:----:|:--------:|:----:|:-------:|:-------:|
 | **TUI (visual interface)** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Google Calendar sync** | ✅ Native | ❌ | 🔧 vdirsyncer | ✅ Native | ❌ |
+| **CalDAV support** | ✅ Native | ❌ | 🔧 vdirsyncer | ❌ | ❌ |
 | **Multi-account** | ✅ | ❌ | 🔧 | ✅ | ❌ |
 | **Vim keybindings** | ✅ | Partial | ❌ | ❌ | Partial |
 | **Multi-day view** | ✅ 1/3/5 cols | ❌ | ❌ | ❌ | ❌ |
@@ -72,7 +75,7 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 
 > 🔧 = Requires additional setup/tools
 
-**TL;DR**: Aion is the only terminal calendar with native Google Calendar sync, multi-account support, Meet link generation, free/busy scheduling, and a proper visual TUI — all in one package.
+**TL;DR**: Aion is the only terminal calendar with native Google Calendar sync, CalDAV support, multi-account support, Meet link generation, free/busy scheduling, and a proper visual TUI — all in one package.
 
 ### Features
 
@@ -81,6 +84,7 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 | **⌨️ Vim Keybindings** | Navigate with `j`/`k`, `gg`/`G`, `h`/`l` — feels like home |
 | **📅 Visual Timeline** | Day view with 15-minute precision and overlap handling |
 | **🔗 Google Calendar Sync** | Multi-account OAuth with PKCE, background sync every 30s |
+| **🗓️ CalDAV Support** | iCloud, Fastmail, Nextcloud, Radicale, and any CalDAV server |
 | **👥 Meet With** | Find free slots across multiple people's calendars |
 | **📹 Google Meet** | Auto-generate Meet links when creating events |
 | **📁 Multi-Calendar** | Toggle calendars on/off, each with its own color |
@@ -144,11 +148,16 @@ bun run build
 # Binary will be at ./dist/aion
 ```
 
-### 2. Set Up Google Cloud Credentials
+### 2. Connect a Calendar
 
-Aion requires your own Google Cloud credentials to access Google Calendar. Here's how to set them up:
+Aion supports **Google Calendar** and **CalDAV** (iCloud, Fastmail, Nextcloud, Radicale, etc.). You can use both at the same time with multiple accounts.
 
-#### Create a Google Cloud Project
+#### Option A: Google Calendar
+
+<details>
+<summary>Set up Google Cloud credentials</summary>
+
+Aion requires your own Google Cloud credentials to access Google Calendar:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Create a new project (or select an existing one)
@@ -156,12 +165,9 @@ Aion requires your own Google Cloud credentials to access Google Calendar. Here'
    - Go to "APIs & Services" → "Library"
    - Search for "Google Calendar API"
    - Click "Enable"
-
-#### Create OAuth Credentials
-
-1. Go to "APIs & Services" → "Credentials"
-2. Click "Create Credentials" → "OAuth client ID"
-3. If prompted, configure the OAuth consent screen:
+4. Go to "APIs & Services" → "Credentials"
+5. Click "Create Credentials" → "OAuth client ID"
+6. If prompted, configure the OAuth consent screen:
    - User Type: **External** (or Internal for Workspace)
    - Add your email as a test user
    - Add the following scopes:
@@ -169,12 +175,10 @@ Aion requires your own Google Cloud credentials to access Google Calendar. Here'
      - `https://www.googleapis.com/auth/calendar.readonly` (read calendars list)
      - `https://www.googleapis.com/auth/userinfo.email` (get user email)
      - `https://www.googleapis.com/auth/userinfo.profile` (get user name/picture)
-4. Create OAuth client ID:
+7. Create OAuth client ID:
    - Application type: **Desktop app**
    - Name: "Aion" (or anything you like)
-5. Copy the **Client ID** and **Client Secret**
-
-#### Configure Aion
+8. Copy the **Client ID** and **Client Secret**
 
 Add your credentials to `~/.config/aion/config.toml`:
 
@@ -191,13 +195,9 @@ export AION_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export AION_GOOGLE_CLIENT_SECRET="your-client-secret"
 ```
 
-### 3. Run
+</details>
 
-```bash
-bun dev
-```
-
-### 4. Connect Google Calendar
+Then connect your account:
 
 ```
 :login
@@ -205,7 +205,34 @@ bun dev
 
 Follow the OAuth flow in your browser. Aion supports multiple Google accounts.
 
-### 5. Navigate
+#### Option B: CalDAV
+
+Add your CalDAV account to `~/.config/aion/config.toml`:
+
+```toml
+[[caldav]]
+name = "iCloud"
+email = "me@icloud.com"
+serverUrl = "https://caldav.icloud.com"
+username = "me@icloud.com"
+password_command = "security find-generic-password -a me@icloud.com -s aion-caldav -w"
+```
+
+Or use the interactive dialog:
+
+```
+:caldav
+```
+
+See [CalDAV configuration](#caldav) for more details and provider-specific URLs.
+
+### 3. Run
+
+```bash
+bun dev
+```
+
+### 4. Navigate
 
 Use `j`/`k` to move through events, `h`/`l` to switch panes, `Enter` to view details.
 
@@ -298,13 +325,14 @@ Open the command palette with `:` and type a command:
 | `now` | Jump to current time |
 | `today` | Jump to today |
 
-### Google Calendar
+### Accounts & Sync
 
 | Command | Action |
 |---------|--------|
-| `login` | Add Google account |
+| `login` | Add Google account (OAuth) |
+| `caldav` | Add CalDAV account |
 | `logout` | Remove all accounts |
-| `sync` | Force sync with Google Calendar |
+| `sync` | Force sync all calendars |
 | `accounts` | Manage connected accounts |
 | `calendars` | Toggle calendars sidebar |
 
@@ -355,7 +383,78 @@ When creating or editing events, you can use natural language for dates and time
 
 ## Configuration
 
-Create `~/.config/aion/config.toml` to customize Aion:
+Create `~/.config/aion/config.toml` to customize Aion.
+
+### Google Calendar
+
+```toml
+[google]
+clientId = "your-client-id.apps.googleusercontent.com"
+clientSecret = "your-client-secret"
+```
+
+### CalDAV
+
+Add one or more CalDAV accounts using `[[caldav]]` array syntax. Each account must have either `password` or `passwordCommand` (command takes precedence).
+
+```toml
+# iCloud
+[[caldav]]
+name = "iCloud"
+email = "me@icloud.com"
+serverUrl = "https://caldav.icloud.com"
+username = "me@icloud.com"
+passwordCommand = "security find-generic-password -a me@icloud.com -s aion-caldav -w"
+
+# Fastmail
+[[caldav]]
+name = "Work"
+email = "me@fastmail.com"
+serverUrl = "https://caldav.fastmail.com/dav/calendars"
+username = "me@fastmail.com"
+passwordCommand = "pass show calendar/fastmail"
+
+# Nextcloud (with plain password)
+[[caldav]]
+name = "Nextcloud"
+email = "me@example.com"
+serverUrl = "https://cloud.example.com/remote.php/dav"
+username = "me"
+password = "app-password-here"
+```
+
+#### Provider URLs
+
+| Provider | Server URL |
+|----------|-----------|
+| **iCloud** | `https://caldav.icloud.com` |
+| **Fastmail** | `https://caldav.fastmail.com/dav/calendars` |
+| **Nextcloud** | `https://your-server.com/remote.php/dav` |
+| **Radicale** | `https://your-server.com/radicale` |
+| **Google** (via CalDAV) | `https://apidata.googleusercontent.com/caldav/v2` |
+
+> **Tip:** For iCloud, use an [app-specific password](https://support.apple.com/en-us/102654) — not your Apple ID password.
+
+#### Password commands
+
+`passwordCommand` runs via `sh -c` and uses the trimmed stdout as the password. Examples:
+
+```toml
+# macOS Keychain
+passwordCommand = "security find-generic-password -a me@icloud.com -s aion-caldav -w"
+
+# pass (GPG)
+passwordCommand = "pass show calendar/icloud"
+
+# 1Password CLI
+passwordCommand = "op read op://Personal/iCloud/password"
+
+# Bitwarden CLI
+passwordCommand = "bw get password icloud-caldav"
+
+# Environment variable
+passwordCommand = "echo $CALDAV_PASSWORD"
+```
 
 ### Theme
 
@@ -422,7 +521,7 @@ New installations follow the [XDG Base Directory Specification](https://specific
 **Configuration** (`~/.config/aion/`):
 | File | Description |
 |------|-------------|
-| `config.toml` | User configuration (Google credentials, theme) |
+| `config.toml` | User configuration (Google credentials, CalDAV accounts, theme) |
 | `contacts.json` | Optional manual contacts for name lookup |
 
 **Data** (`~/.local/share/aion/`):
@@ -451,6 +550,7 @@ You can override XDG paths with environment variables:
 | **Database** | SQLite via [Drizzle ORM](https://orm.drizzle.team) |
 | **Date/Time** | [Luxon](https://moment.github.io/luxon) |
 | **NLP Dates** | [chrono-node](https://github.com/wanasit/chrono) |
+| **CalDAV** | [tsdav](https://github.com/natelindev/tsdav) + [ical.js](https://github.com/kewisch/ical.js) |
 | **Validation** | [Zod](https://zod.dev) |
 
 ---
@@ -478,6 +578,8 @@ You can override XDG paths with environment variables:
 - [x] Built-in credentials for distributed binaries
 - [x] Homebrew distribution
 - [x] XDG Base Directory support
+- [x] CalDAV support (iCloud, Fastmail, Nextcloud, Radicale, etc.)
+- [x] `password_command` for secure credential storage
 
 ### 🚧 In Progress
 
@@ -486,7 +588,6 @@ You can override XDG paths with environment variables:
 ### 📋 Planned
 
 - [ ] Import/export (ICS)
-- [ ] CalDAV support
 - [ ] Offline mode improvements
 - [ ] Custom notifications/reminders
 - [ ] Agenda view (list of upcoming events)
