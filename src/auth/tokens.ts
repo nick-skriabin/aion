@@ -29,7 +29,8 @@ export interface AccountInfo {
 export interface CalDAVCredentials {
   serverUrl: string;
   username: string;
-  password: string; // app-specific password
+  password?: string;
+  password_command?: string;
 }
 
 export interface AccountData {
@@ -100,11 +101,33 @@ async function saveAccountsStore(store: AccountsStore): Promise<void> {
 }
 
 /**
- * Get all logged-in accounts
+ * Get all logged-in accounts (Google from accounts.json + CalDAV from config.toml)
  */
 export async function getAccounts(): Promise<AccountData[]> {
   const store = await loadAccountsStore();
-  return Object.values(store.accounts);
+  // Google accounts from accounts.json
+  const googleAccounts = Object.values(store.accounts).filter(
+    (a) => a.account.type !== "caldav"
+  );
+
+  // CalDAV accounts from config.toml
+  const { getCalDAVAccounts } = await import("../config/config.ts");
+  const caldavConfigs = getCalDAVAccounts();
+  const caldavAccounts: AccountData[] = caldavConfigs.map((cfg) => ({
+    account: {
+      email: cfg.email,
+      name: cfg.name,
+      type: "caldav" as AccountType,
+    },
+    caldavCredentials: {
+      serverUrl: cfg.server_url,
+      username: cfg.username,
+      password: cfg.password,
+      password_command: cfg.password_command,
+    },
+  }));
+
+  return [...googleAccounts, ...caldavAccounts];
 }
 
 /**
@@ -166,43 +189,43 @@ export async function saveAccountTokens(account: AccountInfo, tokens: TokenData)
 }
 
 /**
- * Save CalDAV account credentials
+ * Save CalDAV account credentials (writes to config.toml)
  */
 export async function saveCalDAVAccount(
   account: AccountInfo,
   credentials: CalDAVCredentials
 ): Promise<void> {
-  const store = await loadAccountsStore();
-  
-  store.accounts[account.email] = {
-    account: { ...account, type: "caldav" },
-    caldavCredentials: credentials,
-  };
-  
-  // Set as default if it's the first account
-  if (!store.defaultAccount || Object.keys(store.accounts).length === 1) {
-    store.defaultAccount = account.email;
-  }
-  
-  await saveAccountsStore(store);
+  const { saveCalDAVAccountToConfig } = await import("../config/config.ts");
+  await saveCalDAVAccountToConfig({
+    name: account.name || account.email,
+    email: account.email,
+    server_url: credentials.serverUrl,
+    username: credentials.username,
+    password: credentials.password,
+    password_command: credentials.password_command,
+  });
 }
 
 /**
  * Remove an account
  */
 export async function removeAccount(email: string): Promise<void> {
-  const store = await loadAccountsStore();
-  
-  // Clear CalDAV client cache if this was a CalDAV account
-  const account = store.accounts[email];
-  if (account?.account.type === "caldav") {
+  // Check if it's a CalDAV account (from config.toml)
+  const { getCalDAVAccounts, removeCalDAVAccountFromConfig } = await import("../config/config.ts");
+  const caldavAccounts = getCalDAVAccounts();
+  const isCaldav = caldavAccounts.some((a) => a.email === email);
+
+  if (isCaldav) {
     const { clearCalDAVClient } = await import("../api/caldav.ts");
     clearCalDAVClient(email);
+    await removeCalDAVAccountFromConfig(email);
+    return;
   }
-  
+
+  // Google account — remove from accounts.json
+  const store = await loadAccountsStore();
   delete store.accounts[email];
   
-  // Clear default if it was this account
   if (store.defaultAccount === email) {
     const remaining = Object.keys(store.accounts);
     store.defaultAccount = remaining[0];
@@ -212,11 +235,13 @@ export async function removeAccount(email: string): Promise<void> {
 }
 
 /**
- * Check if any accounts exist
+ * Check if any accounts exist (Google or CalDAV)
  */
 export async function hasAnyAccount(): Promise<boolean> {
   const store = await loadAccountsStore();
-  return Object.keys(store.accounts).length > 0;
+  if (Object.keys(store.accounts).length > 0) return true;
+  const { getCalDAVAccounts } = await import("../config/config.ts");
+  return getCalDAVAccounts().length > 0;
 }
 
 /**

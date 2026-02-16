@@ -916,7 +916,10 @@ export const executeCommandAtom = atom(null, (get, set) => {
   const { findCommand } = require("../keybinds/registry.ts");
   const cmd = findCommand(input);
   
-  if (!cmd) return;
+  if (!cmd) {
+    set(showMessageAtom, { text: `Unknown command: ${input}`, type: "warning", autoDismiss: 3000 });
+    return;
+  }
   
   // Execute action based on command
   switch (cmd.action) {
@@ -1640,7 +1643,13 @@ export const openCalDAVLoginAtom = atom(null, (get, set) => {
 // Add a CalDAV account
 export const addCalDAVAccountAtom = atom(
   null,
-  async (get, set, options: { serverUrl: string; username: string; password: string }) => {
+  async (get, set, options: {
+    serverUrl: string;
+    username: string;
+    password?: string;
+    password_command?: string;
+    name?: string;
+  }) => {
     const { saveCalDAVAccount, getAccounts } = await import("../auth/index.ts");
     const { testCalDAVConnection } = await import("../api/caldav.ts");
     const { isLoggedInAtom, accountsAtom } = await import("./atoms.ts");
@@ -1652,6 +1661,7 @@ export const addCalDAVAccountAtom = atom(
       serverUrl: options.serverUrl,
       username: options.username,
       password: options.password,
+      password_command: options.password_command,
     };
     
     // Test the connection first
@@ -1662,10 +1672,11 @@ export const addCalDAVAccountAtom = atom(
       return false;
     }
     
-    // Save the account
+    // Save the account to config.toml
+    const email = options.username.includes("@") ? options.username : `${options.username}@caldav`;
     const accountInfo = {
-      email: options.username.includes("@") ? options.username : `${options.username}@caldav`,
-      name: options.username,
+      email,
+      name: options.name || options.username,
       type: "caldav" as const,
     };
     

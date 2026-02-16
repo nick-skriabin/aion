@@ -7,6 +7,7 @@
 import { createDAVClient, type DAVCalendar, type DAVObject } from "tsdav";
 import type { GCalEvent } from "../domain/gcalEvent.ts";
 import type { CalDAVCredentials } from "../auth/tokens.ts";
+import { resolvePassword } from "../config/password.ts";
 import { parseICalendar, generateICalendar, extractUID } from "./ical.ts";
 import { makeCompositeId } from "../db/eventsRepo.ts";
 import { apiLogger } from "../lib/logger.ts";
@@ -14,6 +15,18 @@ import type { CalendarListEntry, IncrementalSyncResult } from "./calendar.ts";
 
 // Cache DAV clients per account to avoid re-authenticating
 const clientCache = new Map<string, Awaited<ReturnType<typeof createDAVClient>>>();
+
+/**
+ * Resolve the actual password from CalDAV credentials
+ * (supports password_command for secret managers)
+ */
+async function resolveCalDAVPassword(credentials: CalDAVCredentials, label?: string): Promise<string> {
+  return resolvePassword({
+    password: credentials.password,
+    password_command: credentials.password_command,
+    label: label || `CalDAV ${credentials.username}`,
+  });
+}
 
 /**
  * Get or create a DAV client for a CalDAV account
@@ -24,11 +37,13 @@ async function getDAVClient(accountEmail: string, credentials: CalDAVCredentials
 
   apiLogger.debug(`Creating CalDAV client for ${accountEmail}`, { serverUrl: credentials.serverUrl });
 
+  const password = await resolveCalDAVPassword(credentials, accountEmail);
+
   const client = await createDAVClient({
     serverUrl: credentials.serverUrl,
     credentials: {
       username: credentials.username,
-      password: credentials.password,
+      password,
     },
     authMethod: "Basic",
     defaultAccountType: "caldav",
@@ -54,11 +69,13 @@ export async function testCalDAVConnection(credentials: CalDAVCredentials): Prom
   error?: string;
 }> {
   try {
+    const password = await resolveCalDAVPassword(credentials);
+
     const client = await createDAVClient({
       serverUrl: credentials.serverUrl,
       credentials: {
         username: credentials.username,
-        password: credentials.password,
+        password,
       },
       authMethod: "Basic",
       defaultAccountType: "caldav",

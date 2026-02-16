@@ -4,7 +4,7 @@
  * Supports presets for common CalDAV providers (iCloud, Fastmail, Nextcloud, etc.)
  */
 
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Box, Text, Input, Button, Portal, FocusScope, Select, useInput } from "@semos-labs/glyph";
 import { useSetAtom } from "jotai";
 import { popOverlayAtom, showMessageAtom, addCalDAVAccountAtom } from "../state/actions.ts";
@@ -34,6 +34,8 @@ function DialogKeybinds({ onCancel }: { onCancel: () => void }) {
   return null;
 }
 
+type PasswordMode = "password" | "password_command";
+
 export function CalDAVLoginDialog() {
   const popOverlay = useSetAtom(popOverlayAtom);
   const showMessage = useSetAtom(showMessageAtom);
@@ -43,6 +45,9 @@ export function CalDAVLoginDialog() {
   const [serverUrl, setServerUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordCommand, setPasswordCommand] = useState("");
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("password");
+  const [accountName, setAccountName] = useState("");
   const [connecting, setConnecting] = useState(false);
 
   const handlePresetChange = useCallback((value: string) => {
@@ -69,8 +74,12 @@ export function CalDAVLoginDialog() {
       showMessage({ text: "Username is required", type: "error" });
       return;
     }
-    if (!password.trim()) {
+    if (passwordMode === "password" && !password.trim()) {
       showMessage({ text: "Password is required", type: "error" });
+      return;
+    }
+    if (passwordMode === "password_command" && !passwordCommand.trim()) {
+      showMessage({ text: "Password command is required", type: "error" });
       return;
     }
 
@@ -79,7 +88,10 @@ export function CalDAVLoginDialog() {
       const success = await addAccount({
         serverUrl: serverUrl.trim(),
         username: username.trim(),
-        password: password.trim(),
+        name: accountName.trim() || undefined,
+        ...(passwordMode === "password"
+          ? { password: password.trim() }
+          : { password_command: passwordCommand.trim() }),
       });
 
       if (success) {
@@ -91,7 +103,7 @@ export function CalDAVLoginDialog() {
     } finally {
       setConnecting(false);
     }
-  }, [serverUrl, username, password, addAccount, popOverlay, showMessage]);
+  }, [serverUrl, username, password, passwordCommand, passwordMode, accountName, addAccount, popOverlay, showMessage]);
 
   const handleInputKeyPress = useCallback(
     (key: { name?: string; ctrl?: boolean }) => {
@@ -141,7 +153,6 @@ export function CalDAVLoginDialog() {
             flexDirection: "column",
             paddingX: 1,
             bg: theme.modal.background,
-            clip: true,
           }}
         >
           <FocusScope trap>
@@ -150,7 +161,6 @@ export function CalDAVLoginDialog() {
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
-                clip: true,
               }}
             >
               <Text style={{ bold: true, color: theme.accent.primary }}>
@@ -160,7 +170,7 @@ export function CalDAVLoginDialog() {
             </Box>
 
             {/* Form */}
-            <Box style={{ flexDirection: "column", paddingY: 1, clip: true }}>
+            <Box style={{ flexDirection: "column", paddingY: 1 }}>
               {/* Preset selector */}
               <Box style={{ flexDirection: "row", gap: 1 }}>
                 <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>provider</Text>
@@ -182,7 +192,6 @@ export function CalDAVLoginDialog() {
                     flexDirection: "row",
                     gap: 1,
                     paddingLeft: LABEL_WIDTH + 1,
-                    clip: true,
                   }}
                 >
                   <Text style={{ color: theme.accent.success, dim: true }}>
@@ -191,10 +200,25 @@ export function CalDAVLoginDialog() {
                 </Box>
               )}
 
+              {/* Account name */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>name</Text>
+                <Box style={{ width: INPUT_WIDTH }}>
+                  <Input
+                    value={accountName}
+                    onChange={setAccountName}
+                    placeholder="Work Calendar (optional)"
+                    style={inputStyle}
+                    focusedStyle={focusedInputStyle}
+                    onKeyPress={handleInputKeyPress}
+                  />
+                </Box>
+              </Box>
+
               {/* Server URL */}
-              <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+              <Box style={{ flexDirection: "row", gap: 1 }}>
                 <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>server</Text>
-                <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                <Box style={{ width: INPUT_WIDTH }}>
                   <Input
                     value={serverUrl}
                     onChange={setServerUrl}
@@ -207,9 +231,9 @@ export function CalDAVLoginDialog() {
               </Box>
 
               {/* Username */}
-              <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
+              <Box style={{ flexDirection: "row", gap: 1 }}>
                 <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>username</Text>
-                <Box style={{ width: INPUT_WIDTH, clip: true }}>
+                <Box style={{ width: INPUT_WIDTH }}>
                   <Input
                     value={username}
                     onChange={setUsername}
@@ -221,28 +245,56 @@ export function CalDAVLoginDialog() {
                 </Box>
               </Box>
 
-              {/* Password */}
-              <Box style={{ flexDirection: "row", gap: 1, clip: true }}>
-                <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>password</Text>
-                <Box style={{ width: INPUT_WIDTH, clip: true }}>
-                  <Input
-                    value={password}
-                    onChange={setPassword}
-                    placeholder="app-specific password"
-                    style={inputStyle}
-                    focusedStyle={focusedInputStyle}
-                    onKeyPress={(key) => {
-                      if (key.name === "s" && key.ctrl) {
-                        handleConnect();
-                        return true;
-                      }
-                      if (key.name === "return") {
-                        handleConnect();
-                        return true;
-                      }
-                      return false;
-                    }}
-                  />
+              {/* Password mode toggle */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>auth</Text>
+                <Select
+                  items={[
+                    { label: "Password", value: "password" },
+                    { label: "Password command", value: "password_command" },
+                  ]}
+                  value={passwordMode}
+                  onChange={(v) => setPasswordMode(v as PasswordMode)}
+                  highlightColor={theme.accent.primary}
+                  style={{ bg: theme.input.background }}
+                  focusedStyle={focusedInputStyle}
+                  dropdownStyle={dropdownStyle}
+                />
+              </Box>
+
+              {/* Password or password command */}
+              <Box style={{ flexDirection: "row", gap: 1 }}>
+                <Text style={{ color: theme.text.dim, width: LABEL_WIDTH }}>
+                  {passwordMode === "password" ? "password" : "command"}
+                </Text>
+                <Box style={{ width: INPUT_WIDTH }}>
+                  {passwordMode === "password" ? (
+                    <Input
+                      value={password}
+                      onChange={setPassword}
+                      placeholder="app-specific password"
+                      style={inputStyle}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={(key) => {
+                        if (key.name === "s" && key.ctrl) { handleConnect(); return true; }
+                        if (key.name === "return") { handleConnect(); return true; }
+                        return false;
+                      }}
+                    />
+                  ) : (
+                    <Input
+                      value={passwordCommand}
+                      onChange={setPasswordCommand}
+                      placeholder="pass show calendar/icloud"
+                      style={inputStyle}
+                      focusedStyle={focusedInputStyle}
+                      onKeyPress={(key) => {
+                        if (key.name === "s" && key.ctrl) { handleConnect(); return true; }
+                        if (key.name === "return") { handleConnect(); return true; }
+                        return false;
+                      }}
+                    />
+                  )}
                 </Box>
               </Box>
             </Box>
