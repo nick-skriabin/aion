@@ -1,6 +1,6 @@
 {
   "name": "aion",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Terminal calendar client with vim-style keybindings",
   "author": "Nick Skriabin",
   "license": "MIT",
