@@ -70,7 +70,6 @@ Most calendar apps are mouse-driven, slow, and cluttered. Aion takes a different
 | **Timezone support** | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **Theming** | ✅ TOML | ✅ | ✅ | ❌ | ✅ |
 | **Offline mode** | ✅ SQLite | ✅ | ✅ | ❌ | ✅ |
-| **Binary size** | ~60MB | ~1MB | ~5MB | ~10MB | ~5MB |
 | **Dependencies** | None | ncurses | Python | Python | Python |
 
 > 🔧 = Requires additional setup/tools
