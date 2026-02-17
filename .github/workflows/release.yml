@@ -21,15 +21,19 @@ jobs:
           - os: ubuntu-latest
             target: bun-linux-x64
             artifact: aion-linux-x64
+            strip: true
           - os: ubuntu-latest
             target: bun-linux-arm64
             artifact: aion-linux-arm64
+            strip: true
           - os: macos-latest
             target: bun-darwin-x64
             artifact: aion-darwin-x64
+            strip: false
           - os: macos-latest
             target: bun-darwin-arm64
             artifact: aion-darwin-arm64
+            strip: false
 
     runs-on: ${{ matrix.os }}
 
@@ -47,7 +51,7 @@ jobs:
 
       - name: Build binary
         run: |
-          bun build --compile --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }} \
+          bun build --compile --minify --sourcemap=none --target=${{ matrix.target }} src/index.tsx --outfile ${{ matrix.artifact }} \
             --define __AION_GOOGLE_CLIENT_ID__="'${{ secrets.GOOGLE_CLIENT_ID }}'" \
             --define __AION_GOOGLE_CLIENT_SECRET__="'${{ secrets.GOOGLE_CLIENT_SECRET }}'"
         env:
@@ -55,13 +59,26 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || '' }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || '' }}
 
+      - name: Install llvm-strip (Linux)
+        if: matrix.strip && runner.os == 'Linux'
+        run: sudo apt-get install -y llvm
+
+      - name: Strip binary (Linux)
+        if: matrix.strip && runner.os == 'Linux'
+        run: llvm-strip ${{ matrix.artifact }}
+
       - name: Make executable
         run: chmod +x ${{ matrix.artifact }}
+
+      - name: Package as .tar.zst
+        run: |
+          mv ${{ matrix.artifact }} aion
+          tar -cf - aion | zstd -19 -o ${{ matrix.artifact }}.tar.zst
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact }}
+          files: ${{ matrix.artifact }}.tar.zst
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -106,10 +123,10 @@ jobs:
             echo "$SHA"
           }
 
-          SHA_DARWIN_ARM64=$(get_sha256 "${BASE_URL}/aion-darwin-arm64" "darwin-arm64")
-          SHA_DARWIN_X64=$(get_sha256 "${BASE_URL}/aion-darwin-x64" "darwin-x64")
-          SHA_LINUX_ARM64=$(get_sha256 "${BASE_URL}/aion-linux-arm64" "linux-arm64")
-          SHA_LINUX_X64=$(get_sha256 "${BASE_URL}/aion-linux-x64" "linux-x64")
+          SHA_DARWIN_ARM64=$(get_sha256 "${BASE_URL}/aion-darwin-arm64.tar.zst" "darwin-arm64")
+          SHA_DARWIN_X64=$(get_sha256 "${BASE_URL}/aion-darwin-x64.tar.zst" "darwin-x64")
+          SHA_LINUX_ARM64=$(get_sha256 "${BASE_URL}/aion-linux-arm64.tar.zst" "linux-arm64")
+          SHA_LINUX_X64=$(get_sha256 "${BASE_URL}/aion-linux-x64.tar.zst" "linux-x64")
 
           echo "darwin_arm64=${SHA_DARWIN_ARM64}" >> $GITHUB_OUTPUT
           echo "darwin_x64=${SHA_DARWIN_X64}" >> $GITHUB_OUTPUT
@@ -124,10 +141,9 @@ jobs:
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           repository: ${{ env.HOMEBREW_TAP }}
-          event-type: update-formula
+          event-type: update-formula-aion
           client-payload: >-
             {
-              "formula": "aion",
               "version": "${{ steps.version.outputs.version }}",
               "sha256_darwin_arm64": "${{ steps.sha256.outputs.darwin_arm64 }}",
               "sha256_darwin_x64": "${{ steps.sha256.outputs.darwin_x64 }}",
