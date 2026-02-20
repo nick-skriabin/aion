@@ -15,6 +15,7 @@ import { GotoDateDialog } from "./GotoDateDialog.tsx";
 import { MeetWithDialog } from "./MeetWithDialog.tsx";
 import { AccountsDialog } from "./AccountsDialog.tsx";
 import { CalDAVLoginDialog } from "./CalDAVLoginDialog.tsx";
+import { MessagesDialog } from "./MessagesDialog.tsx";
 import { SearchView } from "./SearchView.tsx";
 import { overlayStackAtom, isLoggedInAtom, enabledCalendarsAtom, enabledCalendarsLoadedAtom } from "../state/atoms.ts";
 import { loadEventsAtom, checkAuthStatusAtom, rebuildSearchIndexAtom, loadCalendarCacheAtom, loadViewSettingsAtom } from "../state/actions.ts";
@@ -51,6 +52,8 @@ function OverlayRenderer() {
             return <AccountsDialog key={`accounts-${index}`} />;
           case "caldavLogin":
             return <CalDAVLoginDialog key={`caldavLogin-${index}`} />;
+          case "messages":
+            return <MessagesDialog key={`messages-${index}`} />;
           // "search" is now handled inline below StatusBar
           // "command" is now handled inline by StatusBar
           default:

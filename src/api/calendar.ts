@@ -105,6 +105,7 @@ export async function getAllCalendars(): Promise<CalendarListEntry[]> {
   const accounts = await getAccounts();
   apiLogger.debug(`Fetching calendars for ${accounts.length} accounts`);
   const allCalendars: CalendarListEntry[] = [];
+  const errors: { email: string; error: Error }[] = [];
   
   for (const account of accounts) {
     try {
@@ -126,7 +127,13 @@ export async function getAllCalendars(): Promise<CalendarListEntry[]> {
       }
     } catch (error) {
       apiLogger.error(`Failed to fetch calendars for ${account.account.email}`, error);
+      errors.push({ email: account.account.email, error: error instanceof Error ? error : new Error(String(error)) });
     }
+  }
+  
+  // If ALL accounts failed, throw the first error so user sees it
+  if (errors.length > 0 && errors.length === accounts.length) {
+    throw errors[0].error;
   }
   
   apiLogger.debug(`Total calendars fetched: ${allCalendars.length}`);
@@ -431,6 +438,7 @@ export async function fetchAllEvents(options: {
   const accounts = await getAccounts();
   const allEvents: GCalEvent[] = [];
   const syncTokens = new Map<string, string>();
+  const accountErrors: { email: string; error: Error }[] = [];
   
   for (const account of accounts) {
     try {
@@ -489,7 +497,13 @@ export async function fetchAllEvents(options: {
       }
     } catch (error) {
       apiLogger.error(`Failed to fetch calendars for ${account.account.email}`, error);
+      accountErrors.push({ email: account.account.email, error: error instanceof Error ? error : new Error(String(error)) });
     }
+  }
+  
+  // If ALL accounts failed, throw the first error so user sees it
+  if (accountErrors.length > 0 && accountErrors.length === accounts.length) {
+    throw accountErrors[0].error;
   }
   
   // Enrich events with display names from contacts (Google accounts only)
@@ -587,6 +601,7 @@ export async function incrementalSyncAll(
   const deleted: string[] = [];
   const syncTokens = new Map<string, string>();
   const calendarsRequiringFullSync: string[] = [];
+  const accountErrors: { email: string; error: Error }[] = [];
   
   for (const account of accounts) {
     try {
@@ -675,7 +690,13 @@ export async function incrementalSyncAll(
       }
     } catch (error) {
       apiLogger.error(`Failed to get calendars for ${account.account.email}`, error);
+      accountErrors.push({ email: account.account.email, error: error instanceof Error ? error : new Error(String(error)) });
     }
+  }
+  
+  // If ALL accounts failed, throw the first error so user sees it
+  if (accountErrors.length > 0 && accountErrors.length === accounts.length) {
+    throw accountErrors[0].error;
   }
   
   // Enrich changed events with display names (Google events only)

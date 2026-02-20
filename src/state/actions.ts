@@ -24,6 +24,7 @@ import {
   dayLayoutAtom,
   messageAtom,
   messageVisibleAtom,
+  messageLogAtom,
   sidebarHeightAtom,
   allDayExpandedAtom,
   timezoneAtom,
@@ -33,6 +34,7 @@ import {
   focusedColumnAtom,
   focusedColumnEventsAtom,
   type FocusContext,
+  type LoggedMessage,
   type Overlay,
   type OverlayKind,
   type RecurrenceScope,
@@ -827,6 +829,8 @@ export const updateAttendanceAtom = atom(
 
 let messageIdCounter = 0;
 
+const MAX_MESSAGE_LOG = 100;
+
 /**
  * Show a message in the command bar area
  * Returns the message ID for updates
@@ -844,6 +848,17 @@ export const showMessageAtom = atom(
     
     set(messageAtom, message);
     set(messageVisibleAtom, true);
+    
+    // Log the message to history (skip progress updates to avoid spam)
+    if (options.type !== "progress") {
+      const loggedMessage: LoggedMessage = {
+        ...message,
+        timestamp: Date.now(),
+      };
+      const currentLog = get(messageLogAtom);
+      const newLog = [...currentLog, loggedMessage].slice(-MAX_MESSAGE_LOG);
+      set(messageLogAtom, newLog);
+    }
     
     // Auto-dismiss after timeout (default: don't auto-dismiss)
     if (options.autoDismiss && options.autoDismiss > 0) {
@@ -958,6 +973,9 @@ export const executeCommandAtom = atom(null, (get, set) => {
       break;
     case "accounts":
       set(showAccountsAtom);
+      break;
+    case "messages":
+      set(showMessagesAtom);
       break;
     case "toggleAllDay":
       set(toggleAllDayExpandedAtom);
@@ -1307,7 +1325,10 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
       set(calendarsAtom, calendarData);
       await saveCalendarCache(calendarData);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       appLogger.error("syncAtom: Failed to fetch calendars", { error });
+      const shortMsg = message.length > 50 ? message.slice(0, 50) + "..." : message;
+      set(showMessageAtom, { text: `Calendar error: ${shortMsg}`, type: "error" });
     }
     
     // Force full sync if requested
@@ -1510,11 +1531,10 @@ export const syncAtom = atom(null, async (get, set, options?: { force?: boolean;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (!isBackgroundSync) {
-      set(showMessageAtom, { text: `Sync failed: ${message}`, type: "error" });
-    } else {
-      appLogger.error("Background sync failed", { error: message });
-    }
+    appLogger.error("Sync failed", { error: message, background: isBackgroundSync });
+    // Always show sync errors - user needs to know something is wrong
+    const shortMsg = message.length > 60 ? message.slice(0, 60) + "..." : message;
+    set(showMessageAtom, { text: `Sync error: ${shortMsg}`, type: "error" });
   }
   
   set(isSyncingAtom, false);
@@ -1570,7 +1590,10 @@ export const fetchCalendarsAtom = atom(null, async (get, set) => {
     // Save to cache for instant load next time
     await saveCalendarCache(calendarData);
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     appLogger.error("fetchCalendarsAtom: Failed to fetch calendars", { error });
+    const shortMsg = message.length > 50 ? message.slice(0, 50) + "..." : message;
+    set(showMessageAtom, { text: `Calendar error: ${shortMsg}`, type: "error" });
   }
 });
 
@@ -1613,7 +1636,10 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
       set(calendarsAtom, calendarData);
       await saveCalendarCache(calendarData);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       appLogger.error("checkAuthStatusAtom: Failed to fetch calendars", { error });
+      const shortMsg = message.length > 50 ? message.slice(0, 50) + "..." : message;
+      set(showMessageAtom, { text: `Calendar error: ${shortMsg}`, type: "error" });
     }
     
     // Start background sync if logged in
@@ -1631,6 +1657,16 @@ export const checkAuthStatusAtom = atom(null, async (get, set) => {
 // Open accounts management dialog
 export const showAccountsAtom = atom(null, async (get, set) => {
   set(pushOverlayAtom, { kind: "accounts" });
+});
+
+// Open messages log dialog
+export const showMessagesAtom = atom(null, (get, set) => {
+  set(pushOverlayAtom, { kind: "messages" });
+});
+
+// Clear message log
+export const clearMessageLogAtom = atom(null, (get, set) => {
+  set(messageLogAtom, []);
 });
 
 // ===== CalDAV Actions =====

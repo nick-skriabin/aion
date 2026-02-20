@@ -273,8 +273,22 @@ async function refreshAccountToken(email: string, refreshToken: string): Promise
   });
   
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to refresh token: ${error}`);
+    const errorText = await response.text();
+    // Parse Google's error response for user-friendly messages
+    let errorMsg = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed.error === "invalid_grant") {
+        errorMsg = "Token expired/revoked. Run 'login' to re-authenticate.";
+      } else if (parsed.error_description) {
+        errorMsg = parsed.error_description;
+      } else if (parsed.error) {
+        errorMsg = parsed.error;
+      }
+    } catch {
+      // Not JSON, use raw text
+    }
+    throw new Error(errorMsg);
   }
   
   const data = await response.json() as { access_token: string; expires_in: number; token_type: string; scope: string };
@@ -302,6 +316,7 @@ async function refreshAccountToken(email: string, refreshToken: string): Promise
 /**
  * Get a valid access token for an account, refreshing if necessary
  * Returns null for CalDAV accounts (they use credentials, not tokens)
+ * Throws on token refresh failure so caller can show the error
  */
 export async function getValidAccessTokenForAccount(email: string): Promise<string | null> {
   const account = await getAccount(email);
@@ -317,17 +332,13 @@ export async function getValidAccessTokenForAccount(email: string): Promise<stri
   
   if (isTokenExpired(account.tokens)) {
     if (!account.tokens.refresh_token) {
-      return null;
+      throw new Error(`No refresh token for ${email}. Please re-login.`);
     }
     
-    try {
-      const refreshed = await refreshAccountToken(email, account.tokens.refresh_token);
-      authLogger.info(`Token refreshed for ${email}`);
-      return refreshed.access_token;
-    } catch (error) {
-      authLogger.error(`Failed to refresh token for ${email}`, error);
-      return null;
-    }
+    // Let token refresh errors propagate so user sees the actual issue
+    const refreshed = await refreshAccountToken(email, account.tokens.refresh_token);
+    authLogger.info(`Token refreshed for ${email}`);
+    return refreshed.access_token;
   }
   
   return account.tokens.access_token;
@@ -374,6 +385,16 @@ export async function exchangeCodeForTokens(code: string, codeVerifier: string):
   }
   
   const tokens = await response.json() as TokenData;
+  
+  // Validate we got a refresh_token - Google sometimes omits it on re-auth
+  if (!tokens.refresh_token) {
+    authLogger.warn("No refresh_token in response - user may need to revoke access first");
+    throw new Error(
+      "Google didn't provide a refresh token. Please revoke Aion's access at " +
+      "https://myaccount.google.com/permissions and try again."
+    );
+  }
+  
   authLogger.info("Successfully exchanged code for tokens");
   return tokens;
 }

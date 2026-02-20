@@ -17,7 +17,7 @@ export type FocusContext =
   | "search";
 
 // ===== Overlay Types =====
-export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith" | "accounts" | "caldavLogin" | "search";
+export type OverlayKind = "details" | "dialog" | "confirm" | "command" | "help" | "notifications" | "proposeTime" | "goto" | "meetWith" | "accounts" | "caldavLogin" | "search" | "messages";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -153,11 +153,20 @@ export interface Message {
   };
 }
 
+// Logged message with timestamp for history
+export interface LoggedMessage extends Message {
+  timestamp: number;
+}
+
 // Current message to display in the command bar area
 export const messageAtom = atom<Message | null>(null);
 
 // Message visibility (hidden when command bar opens)
 export const messageVisibleAtom = atom<boolean>(true);
+
+// Message log - stores all messages for the :messages command
+const MAX_MESSAGE_LOG = 100;
+export const messageLogAtom = atom<LoggedMessage[]>([]);
 
 // ===== Multi-Account State =====
 
